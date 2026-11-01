@@ -15,61 +15,37 @@ is close enough to what this does to a save.
 
 ---
 
-## What it looks like
+## Where to find it
 
-**Sending.** Save the game, quit, run one command:
+Install the mod and **Engram** appears in the main menu and the pause menu, next to Load
+Game. Everything happens from there: pick a save, get a code, or type in a code somebody
+read out to you.
 
-```
-engram share ManualSave-1
-```
+There is also a standalone tool for moving a save with no mod installed, no game running,
+or no network at all. It is described further down.
 
-```
-sharing ManualSave-1
-  save             level 60 StreetKid, 105h 15m played, saved 19:09:31, 2.08.2026
-  mods recorded    32
-  sealed           4.6 MB, AES-256-GCM
-  uploading to Litterbox, which keeps it for 72h
-
-  Read this out. It is the whole thing the other person needs.
-
-    C0FE-GGYV-7FPR-4TQX
-
-  C zero F E,  G G Y V,  7 F P R,  4 T Q X
-```
-
-**Receiving.** The other person runs:
-
-```
-engram get C0FE-GGYV-7FPR-4TQX
-```
-
-Engram downloads the save, compares your mods against theirs, shows you anything that
-differs, and writes the save once you say yes. Start the game and it is in the load list.
-
-There is a window too, if you would rather click than type:
-
-```
-engram gui
-```
+> **Being built right now.** The menu, the popup and the save list are in and working. The
+> Share and Receive buttons behind them are not finished, and say so when you press them.
+> Until they are, use the standalone tool for the transfer itself. This note goes away when
+> that lands.
 
 ---
 
-## Installing
+## Installing the mod
 
-You need Python 3.10 or newer.
+You need [RED4ext](https://www.nexusmods.com/cyberpunk2077/mods/2380) and
+[Codeware](https://www.nexusmods.com/cyberpunk2077/mods/7780). Most modded installs already
+have both.
+
+Extract `Engram-0.1.0.zip` into your Cyberpunk 2077 folder, the one with `bin`, `r6` and
+`archive` in it. Vortex and Mod Organizer handle the archive as it is.
+
+To remove it, delete these two folders:
 
 ```
-pip install git+https://github.com/tfthushaar/Engram
+red4ext/plugins/Engram
+r6/scripts/Engram
 ```
-
-If you would rather have a single file to hand around, build one:
-
-```
-pip install pyinstaller
-pyinstaller engram.spec
-```
-
-That leaves `engram.exe` in `dist`, and it needs nothing else installed.
 
 ---
 
@@ -107,47 +83,17 @@ sender's mod list, compares it against yours, and sorts the differences into thr
 in mods that keep no state, an older save on a newer patch, and the game's own modded
 flag, which disables achievements while you play that save.
 
-Nothing is written until you have seen all of that and said yes. If you disagree with a
-stop, `--force` goes ahead anyway.
-
-To look without committing to anything:
-
-```
-engram inspect C0FE-GGYV-7FPR-4TQX
-engram get C0FE-GGYV-7FPR-4TQX --dry-run
-```
+Nothing is written until you have seen all of that and agreed to it.
 
 ---
 
 ## Where the save goes
 
 Into a new folder next to your own saves, named `EngramSave-1`, then `EngramSave-2`, and
-so on. Engram never writes over a save that is already there. If you point it at an
-existing slot with `--into`, it copies that slot somewhere safe first and tells you where.
+so on. Engram never writes over a save that is already there.
 
 `EnabledMods.json` is shared by every save and is never copied, so an import cannot change
 which mods you have enabled.
-
----
-
-## Without the internet
-
-The code route is a convenience on top of something simpler that always works:
-
-```
-engram pack ManualSave-1 -o myrun.engram
-```
-
-Put the file on a USB stick, or in a chat window, or anywhere else, then on the other
-machine:
-
-```
-engram unpack myrun.engram
-```
-
-Same checks, same report, same refusal to overwrite anything. `--seal` encrypts the file
-and prints a passphrase for it, if it is going somewhere you would rather it was not
-readable.
 
 ---
 
@@ -171,7 +117,62 @@ whether a stranger meant well. Take codes from people you know.
 
 ---
 
-## Commands
+## The standalone tool
+
+The mod is the way most people will use Engram. The tool is for the times it cannot help:
+no mod installed, the game will not start, a friend who does not mod, or no network at all.
+
+Download `engram.exe` and run it from a terminal. It needs nothing installed.
+
+**Sending:**
+
+```
+engram share ManualSave-1
+```
+
+```
+sharing ManualSave-1
+  save             level 60 StreetKid, 105h 15m played, saved 19:09:31, 2.08.2026
+  mods recorded    32
+  sealed           4.6 MB, AES-256-GCM
+  uploading to Litterbox, which keeps it for 72h
+
+  Read this out. It is the whole thing the other person needs.
+
+    C0FE-GGYV-7FPR-4TQX
+
+  C zero F E,  G G Y V,  7 F P R,  4 T Q X
+```
+
+**Receiving:**
+
+```
+engram get C0FE-GGYV-7FPR-4TQX
+```
+
+Same checks, same report, same refusal to overwrite anything.
+
+**With no internet at all**, which also works when every free file host is down:
+
+```
+engram pack ManualSave-1 -o myrun.engram
+```
+
+Put the file on a USB stick, or in a chat window, then on the other machine:
+
+```
+engram unpack myrun.engram
+```
+
+`--seal` encrypts that file and prints a passphrase for it.
+
+There is a window too, if you would rather click than type:
+
+```
+engram gui
+```
+
+### Commands
 
 | Command | What it does |
 |---|---|
@@ -194,6 +195,10 @@ Useful flags: `--dry-run` to check without writing, `--force` to go ahead past a
 
 ## When something is not right
 
+**Engram is not in the menu.** Check that `red4ext/plugins/Engram/Engram.dll` and
+`r6/scripts/Engram/` both exist, and that RED4ext and Codeware are installed. If the game
+starts with every mod disabled, look in `r6/logs/redscript_rCURRENT.log`.
+
 **Engram cannot find my game.** Run `engram doctor` to see where it looked. It reads the
 Steam library list, the GOG registry entries and the Epic manifests, and it only accepts a
 folder with `bin/x64/Cyberpunk2077.exe` in it, so a leftover mod folder is not mistaken for
@@ -201,7 +206,7 @@ an install. Point it at the right place with `--game-dir`.
 
 **The code does not work.** If it says the file is gone, it has probably expired, since
 codes last 72 hours. If it downloads and then says the secret did not open it, the last
-four characters are wrong.
+eight characters are wrong.
 
 **A host refuses to take the file.** Engram knows more than one, and tries the next one by
 itself. Which host a code is on is baked into its first character, so old codes keep
@@ -232,6 +237,33 @@ does not match the sender's. Drop an `engram.json` beside your mod:
 Without it, Engram reads versions out of DLL resources, REDmod `info.json` files, Lua
 sources and folder names, and guesses at persistent state by looking for `persistent let`
 in your redscript sources. The guess is usually right. Your declaration is always right.
+
+---
+
+## Building it yourself
+
+The mod needs Visual Studio Build Tools with the C++ workload and the Windows SDK.
+
+```
+git clone --recurse-submodules https://github.com/tfthushaar/Engram
+cd Engram/native
+cmake -B build -S . -A x64
+cmake --build build --config Release
+cd ..
+python tools/build_mod_zip.py
+```
+
+That writes `dist/Engram-0.1.0.zip`. `tools/check_redscript.py` compiles the mod's
+redscript with the game's own compiler without launching Cyberpunk, which is worth running
+before any install, because a redscript mistake disables every mod on the next launch.
+
+The standalone tool needs Python 3.10 or newer and one package:
+
+```
+pip install -e .
+python -m pytest
+pyinstaller engram.spec
+```
 
 ---
 
