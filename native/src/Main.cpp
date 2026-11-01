@@ -15,9 +15,11 @@
 #include <RED4ext/Scripting/IScriptable.hpp>
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
+#include "Jobs.hpp"
 #include "SaveFolder.hpp"
 #include "Version.hpp"
 
@@ -111,6 +113,134 @@ void GetSaveNames(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame,
         aOut->PushBack(RED4ext::CString(name.c_str()));
     }
 }
+
+// Natives that take arguments have to read them off the frame themselves, in order, and
+// then step past ParamEnd.
+RED4ext::CString ReadString(RED4ext::CStackFrame* aFrame)
+{
+    RED4ext::CString value;
+    RED4ext::GetParameter(aFrame, &value);
+    return value;
+}
+
+int32_t ReadInt(RED4ext::CStackFrame* aFrame)
+{
+    int32_t value = 0;
+    RED4ext::GetParameter(aFrame, &value);
+    return value;
+}
+
+bool ReadBool(RED4ext::CStackFrame* aFrame)
+{
+    bool value = false;
+    RED4ext::GetParameter(aFrame, &value);
+    return value;
+}
+
+void StartShare(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto name = ReadString(aFrame);
+    aFrame->code++;
+    const auto job = engram::StartShare(name.c_str() ? name.c_str() : "");
+    if (aOut)
+    {
+        *aOut = job;
+    }
+}
+
+void StartFetch(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto code = ReadString(aFrame);
+    aFrame->code++;
+    const auto job = engram::StartFetch(code.c_str() ? code.c_str() : "");
+    if (aOut)
+    {
+        *aOut = job;
+    }
+}
+
+void StartWrite(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto fetchJob = ReadInt(aFrame);
+    const auto force = ReadBool(aFrame);
+    aFrame->code++;
+    const auto job = engram::StartWrite(fetchJob, force);
+    if (aOut)
+    {
+        *aOut = job;
+    }
+}
+
+void JobState(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = static_cast<int32_t>(engram::Report(job).state);
+    }
+}
+
+void JobMessage(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, RED4ext::CString* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = RED4ext::CString(engram::Report(job).message.c_str());
+    }
+}
+
+void JobCode(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, RED4ext::CString* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = RED4ext::CString(engram::Report(job).code.c_str());
+    }
+}
+
+void JobBlocked(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, bool* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = engram::Report(job).blocked;
+    }
+}
+
+void JobFindings(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame,
+                 RED4ext::DynArray<RED4ext::CString>* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (!aOut)
+    {
+        return;
+    }
+    const auto report = engram::Report(job);
+    aOut->Clear();
+    aOut->Reserve(static_cast<uint32_t>(report.findings.size()));
+    for (const auto& line : report.findings)
+    {
+        aOut->PushBack(RED4ext::CString(line.c_str()));
+    }
+}
+
+void CancelJob(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, void*, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    engram::Cancel(job);
+}
+
+void ForgetJobs(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, void*, int64_t)
+{
+    aFrame->code++;
+    engram::Forget();
+}
 } // namespace
 
 RED4EXT_C_EXPORT void RED4EXT_CALL RegisterTypes()
@@ -146,6 +276,44 @@ RED4EXT_C_EXPORT void RED4EXT_CALL PostRegisterTypes()
         auto* func = RED4ext::CClassStaticFunction::Create(&g_class, "SaveNames", "SaveNames", &GetSaveNames);
         func->flags = flags;
         func->SetReturnType("array:String");
+        g_class.RegisterFunction(func);
+    }
+
+    struct Native
+    {
+        const char* name;
+        void* handler;
+        const char* returns;
+        std::vector<const char*> takes;
+    };
+
+    const Native natives[] = {
+        {"StartShare", &StartShare, "Int32", {"String"}},
+        {"StartFetch", &StartFetch, "Int32", {"String"}},
+        {"StartWrite", &StartWrite, "Int32", {"Int32", "Bool"}},
+        {"JobState", &JobState, "Int32", {"Int32"}},
+        {"JobMessage", &JobMessage, "String", {"Int32"}},
+        {"JobCode", &JobCode, "String", {"Int32"}},
+        {"JobBlocked", &JobBlocked, "Bool", {"Int32"}},
+        {"JobFindings", &JobFindings, "array:String", {"Int32"}},
+        {"CancelJob", &CancelJob, nullptr, {"Int32"}},
+        {"ForgetJobs", &ForgetJobs, nullptr, {}},
+    };
+
+    for (const auto& native : natives)
+    {
+        auto* func = RED4ext::CClassStaticFunction::Create(
+            &g_class, native.name, native.name,
+            reinterpret_cast<RED4ext::ScriptingFunction_t<void*>>(native.handler));
+        func->flags = flags;
+        for (const auto* takes : native.takes)
+        {
+            func->AddParam(takes, "arg");
+        }
+        if (native.returns)
+        {
+            func->SetReturnType(native.returns);
+        }
         g_class.RegisterFunction(func);
     }
 

@@ -35,6 +35,7 @@ add_subdirectory(vendor/RED4ext.SDK)
 
 add_library(Engram SHARED
   src/Main.cpp
+  src/Jobs.cpp
   src/SaveFolder.cpp
 )
 
