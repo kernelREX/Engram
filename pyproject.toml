@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engram"
+version = "0.1.0"
+description = "Carry a Cyberpunk 2077 save to another PC with a code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["cyberpunk2077", "savegame", "transfer", "mods"]
+classifiers = [
+    "Environment :: Console",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+dependencies = ["cryptography>=41.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pyinstaller>=6.3"]
+
+[project.scripts]
+engram = "engram.cli:main"
+
+[project.gui-scripts]
+engram-gui = "engram.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/tfthushaar/Engram"
+Issues = "https://github.com/tfthushaar/Engram/issues"
+
+[tool.setuptools]
+packages = ["engram", "engram.hosts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+filterwarnings = ["error::DeprecationWarning"]
