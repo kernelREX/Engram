@@ -91,7 +91,14 @@ class Worker:
         self.results: queue.Queue = queue.Queue()
         self.stopped = False
         self._threads: list[threading.Thread] = []
-        self._timer: str | None = self.root.after(self.POLL_MS, self._drain)
+        self._timer: str | None = None
+        self.start_polling()
+
+    def start_polling(self) -> None:
+        """Begin, or begin again, handing results back on the interface thread."""
+        self.stopped = False
+        if self._timer is None:
+            self._timer = self.root.after(self.POLL_MS, self._drain)
 
     def start(self, job: Callable[[], object], done: Callable[[object, Exception | None], None]):
         def run():

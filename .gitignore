@@ -11,3 +11,6 @@ htmlcov/
 *.engram
 scratch/
 STATUS.md
+dist/
+build/
+run_engram.spec

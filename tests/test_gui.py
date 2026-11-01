@@ -1,7 +1,12 @@
 """The window: it has to build, switch, select and render without raising.
 
-These tests open a real Tk window, drive it, and close it. They are skipped where there is
-no display to open one on. Nothing here uploads or writes.
+One Tk interpreter serves the whole module and is pointed at a fresh pair of folders for
+each test. Creating and tearing down an interpreter per test makes Tcl reread its own init
+script a few dozen times in quick succession, which fails on Windows often enough to turn
+a green suite red for reasons that have nothing to do with this code.
+
+Skipped where there is no display to open a window on. Nothing here uploads, and nothing
+is written outside the test's own temporary directory.
 """
 
 from __future__ import annotations
@@ -10,32 +15,61 @@ import pytest
 
 tk = pytest.importorskip("tkinter")
 
-from engram import compare, mods, running  # noqa: E402
+from engram import compare, container, mods, running, saves  # noqa: E402
 from engram.config import Config  # noqa: E402
-from engram.mods import ModEntry, ModSet  # noqa: E402
 
 from conftest import build_game, write_save
 
 
-@pytest.fixture(scope="session")
-def display():
-    """Check that a window can be opened at all, without leaving one open.
+def pump(window, times: int = 6) -> None:
+    for _ in range(times):
+        window.update()
+        window.update_idletasks()
 
-    Tkinter does not take kindly to two Tk interpreters in one process, and the Window
-    under test is itself a Tk, so this fixture must not hold a root of its own.
-    """
+
+@pytest.fixture(scope="module")
+def app(tmp_path_factory):
+    """The one window this module shares, started on an empty folder of its own."""
+    from engram import gui
+
+    blank = tmp_path_factory.mktemp("blank-saves")
     try:
-        probe = tk.Tk()
-    except tk.TclError:
-        pytest.skip("no display available")
-    probe.destroy()
-    yield
+        created = gui.Window(Config(save_dir=str(blank), game_dir=str(blank)))
+    except tk.TclError as exc:
+        pytest.skip(f"no display available: {exc}")
+    created.withdraw()
+    try:
+        yield created
+    finally:
+        created.destroy()
+
+
+def point_at(window, save_root, game_root) -> None:
+    """Aim the window at another pair of folders, the way reopening it would."""
+    window.config_data = Config(save_dir=str(save_root), game_dir=str(game_root))
+    window.worker.stop()
+    window.worker.start_polling()
+
+    for card in window.cards:
+        card._thumbnail = None
+    window.cards = []
+    window.picked = None
+    window.incoming = None
+    window.local_mods = None
+    window.save_dir = None
+    window.game = None
+
+    window.receive_area.clear()
+    window.code_entry.delete(0, "end")
+    window._send_placeholder()
+    window._show("send")
+    window._locate()
+    pump(window)
 
 
 @pytest.fixture
-def window(tmp_path, display, monkeypatch):
-    from engram import gui
-
+def window(app, tmp_path, monkeypatch):
+    """The shared window, pointed at this test's own save and game folders."""
     monkeypatch.setattr(running, "check", lambda: running.Running())
 
     save_root = tmp_path / "saves"
@@ -47,21 +81,9 @@ def window(tmp_path, display, monkeypatch):
         redscript={"Cyberbane": {"persistent": True, "version": "1.4.5"}},
         plugins={"ArchiveXL": "1.28.6"},
     )
-
-    config = Config(save_dir=str(save_root), game_dir=str(game.path))
-    created = gui.Window(config)
-    created.withdraw()
-    created.update()
-    try:
-        yield created
-    finally:
-        created.destroy()
-
-
-def pump(window, times: int = 6) -> None:
-    for _ in range(times):
-        window.update()
-        window.update_idletasks()
+    point_at(app, save_root, game.path)
+    yield app
+    app.worker.stop()
 
 
 def test_the_window_builds_and_finds_both_folders(window, tmp_path):
@@ -70,7 +92,6 @@ def test_the_window_builds_and_finds_both_folders(window, tmp_path):
 
 
 def test_both_saves_appear_as_cards(window):
-    pump(window)
     assert [card.slot.folder_name for card in window.cards] == [
         "ManualSave-1",
         "QuickSave-0",
@@ -78,14 +99,12 @@ def test_both_saves_appear_as_cards(window):
 
 
 def test_the_newest_save_starts_selected(window):
-    pump(window)
     assert window.picked is not None
     assert window.picked.folder_name == "ManualSave-1"
     assert window.cards[0].selected and not window.cards[1].selected
 
 
 def test_picking_another_save_moves_the_selection(window):
-    pump(window)
     window.cards[1]._clicked()
     pump(window)
     assert window.picked.folder_name == "QuickSave-0"
@@ -96,7 +115,7 @@ def test_switching_views_works_both_ways(window):
     for which in ("receive", "send", "receive", "send"):
         window._show(which)
         pump(window, 2)
-    assert window.views["send"].winfo_ismapped() or True
+    assert window.views["send"].winfo_manager() == "pack"
 
 
 def test_the_mod_list_is_read_on_a_worker_thread(window):
@@ -151,12 +170,10 @@ def test_a_clean_report_renders(window):
     assert holder.winfo_children()
 
 
-def test_the_incoming_panel_renders_and_cancels(window, tmp_path):
-    from engram import container
-
+def test_the_incoming_panel_renders_and_cancels(window):
     found = mods.scan(window.game)
-    slot = next(s for s in __import__("engram.saves", fromlist=["x"]).list_saves(window.save_dir))
-    blob, manifest = container.pack(slot, found)
+    slot = saves.list_saves(window.save_dir)[0]
+    blob, _ = container.pack(slot, found)
     bundle = container.unpack(blob)
 
     window._show("receive")
@@ -171,8 +188,6 @@ def test_the_incoming_panel_renders_and_cancels(window, tmp_path):
 
 
 def test_writing_an_incoming_save_lands_in_a_new_slot(window):
-    from engram import container, saves
-
     found = mods.scan(window.game)
     slot = saves.list_saves(window.save_dir)[0]
     blob, _ = container.pack(slot, found)
@@ -198,53 +213,25 @@ def test_a_failed_download_is_shown_rather_than_raised(window):
     assert "not answering" in window.status.cget("text")
 
 
-def test_a_save_with_no_screenshot_still_gets_a_card(tmp_path, display, monkeypatch):
-    from engram import gui
-
-    monkeypatch.setattr(running, "check", lambda: running.Running())
-    save_root = tmp_path / "saves"
+def test_a_save_with_no_screenshot_still_gets_a_card(window, tmp_path):
+    save_root = tmp_path / "noshot"
     save_root.mkdir()
     slot = write_save(save_root, "ManualSave-1")
     (slot.path / "screenshot.png").unlink()
-    game = build_game(tmp_path / "game")
 
-    created = gui.Window(Config(save_dir=str(save_root), game_dir=str(game.path)))
-    created.withdraw()
-    try:
-        pump(created)
-        assert len(created.cards) == 1
-    finally:
-        created.destroy()
+    point_at(window, save_root, window.game.path)
+    assert len(window.cards) == 1
+    assert window.cards[0]._thumbnail is None
 
 
-def test_an_empty_save_folder_says_so(tmp_path, display, monkeypatch):
-    from engram import gui
-
-    monkeypatch.setattr(running, "check", lambda: running.Running())
-    save_root = tmp_path / "saves"
+def test_an_empty_save_folder_says_so(window, tmp_path):
+    save_root = tmp_path / "empty"
     save_root.mkdir()
-    game = build_game(tmp_path / "game")
-
-    created = gui.Window(Config(save_dir=str(save_root), game_dir=str(game.path)))
-    created.withdraw()
-    try:
-        pump(created)
-        assert created.cards == []
-    finally:
-        created.destroy()
+    point_at(window, save_root, window.game.path)
+    assert window.cards == []
 
 
-def test_a_missing_save_folder_is_reported_not_fatal(tmp_path, display, monkeypatch):
-    from engram import gui
-
-    monkeypatch.setattr(running, "check", lambda: running.Running())
-    created = gui.Window(
-        Config(save_dir=str(tmp_path / "nowhere"), game_dir=str(tmp_path / "nogame"))
-    )
-    created.withdraw()
-    try:
-        pump(created)
-        assert created.save_dir is None
-        assert created.status.cget("text")
-    finally:
-        created.destroy()
+def test_a_missing_save_folder_is_reported_not_fatal(window, tmp_path):
+    point_at(window, tmp_path / "nowhere", tmp_path / "nogame")
+    assert window.save_dir is None
+    assert "is not a directory" in window.status.cget("text")

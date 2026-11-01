@@ -9,7 +9,7 @@
 block_cipher = None
 
 analysis = Analysis(
-    ["engram/__main__.py"],
+    ["run_engram.py"],
     pathex=["."],
     binaries=[],
     datas=[],
