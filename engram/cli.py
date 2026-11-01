@@ -243,6 +243,8 @@ def cmd_pack(ctx: Context) -> int:
     ui.heading(f"packed {slot.folder_name}")
     ui.field("save", manifest.describe())
     ui.field("mods recorded", str(len(manifest.mods)))
+    ui.say()
+    ui.finding(compare.mods_on_this_save(manifest.mods), limit=40)
     ui.field("file", str(written))
     ui.field("size", ui.megabytes(len(blob)))
     if secret:
@@ -286,6 +288,10 @@ def cmd_share(ctx: Context) -> int:
     ui.heading(f"sharing {slot.folder_name}")
     ui.field("save", slot.describe())
     ui.field("mods recorded", str(len(ctx.mods)))
+
+    # Say what is travelling before the code exists, so the sender can stop here.
+    ui.say()
+    ui.finding(compare.mods_on_this_save(ctx.mods), limit=40)
 
     last_error: str | None = None
     for host in hosts:

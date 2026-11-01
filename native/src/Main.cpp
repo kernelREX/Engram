@@ -10,6 +10,8 @@
 // the RTTI system, redscript can call it, strings and arrays survive the boundary, and the
 // process can read the save folder from inside the game.
 
+#include <windows.h>
+
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/RTTITypes.hpp>
 #include <RED4ext/Scripting/IScriptable.hpp>
@@ -171,6 +173,26 @@ void StartWrite(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aO
     }
 }
 
+void JobKind(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = static_cast<int32_t>(engram::Report(job).kind);
+    }
+}
+
+void JobModded(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, bool* aOut, int64_t)
+{
+    const auto job = ReadInt(aFrame);
+    aFrame->code++;
+    if (aOut)
+    {
+        *aOut = engram::Report(job).modded;
+    }
+}
+
 void JobState(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
 {
     const auto job = ReadInt(aFrame);
@@ -292,6 +314,8 @@ RED4EXT_C_EXPORT void RED4EXT_CALL PostRegisterTypes()
         {"StartFetch", &StartFetch, "Int32", {"String"}},
         {"StartWrite", &StartWrite, "Int32", {"Int32", "Bool"}},
         {"JobState", &JobState, "Int32", {"Int32"}},
+        {"JobKind", &JobKind, "Int32", {"Int32"}},
+        {"JobModded", &JobModded, "Bool", {"Int32"}},
         {"JobMessage", &JobMessage, "String", {"Int32"}},
         {"JobCode", &JobCode, "String", {"Int32"}},
         {"JobBlocked", &JobBlocked, "Bool", {"Int32"}},
@@ -330,6 +354,19 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_handle = aHandle;
         g_sdk = aSdk;
 
+        // The plugin sits at <game>/red4ext/plugins/Engram/Engram.dll, so the game
+        // directory is four levels up. Inside the game there is nothing to search for.
+        wchar_t modulePath[MAX_PATH] = {};
+        HMODULE self = nullptr;
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&Log), &self);
+        if (self && GetModuleFileNameW(self, modulePath, MAX_PATH))
+        {
+            engram::SetGameDir(
+                std::filesystem::path(modulePath).parent_path().parent_path().parent_path().parent_path());
+        }
+
         auto* rtti = RED4ext::CRTTISystem::Get();
         rtti->AddRegisterCallback(RegisterTypes);
         rtti->AddPostRegisterCallback(PostRegisterTypes);
@@ -352,7 +389,7 @@ RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::v1::PluginInfo* aInfo)
 {
     aInfo->name = L"Engram";
     aInfo->author = L"tfthushaar";
-    aInfo->version = RED4EXT_V1_SEMVER(0, 1, 0);
+    aInfo->version = RED4EXT_V1_SEMVER(1, 0, 0);
         // Pinned to the build the SDK submodule describes. RED4ext refuses to load a plugin
     // built against a different game build, which is the behaviour we want: an SDK that
     // disagrees with the game about struct layouts would fail far less politely.

@@ -16,6 +16,14 @@ enum EngramJobState {
   Failed = 3,
 }
 
+// What a job was started to do, so the menu does not guess from its output.
+enum EngramJobKind {
+  None = 0,
+  Share = 1,
+  Fetch = 2,
+  Write = 3,
+}
+
 public native class EngramNative extends IScriptable {
   public static native func Version() -> String
   public static native func SaveFolder() -> String
@@ -26,6 +34,8 @@ public native class EngramNative extends IScriptable {
   public static native func StartWrite(fetchJob: Int32, force: Bool) -> Int32
 
   public static native func JobState(job: Int32) -> Int32
+  public static native func JobKind(job: Int32) -> Int32
+  public static native func JobModded(job: Int32) -> Bool
   public static native func JobMessage(job: Int32) -> String
   public static native func JobCode(job: Int32) -> String
   public static native func JobBlocked(job: Int32) -> Bool
@@ -55,6 +65,15 @@ public class Engram {
       case 2: return EngramJobState.Done;
       case 3: return EngramJobState.Failed;
       default: return EngramJobState.Unknown;
+    };
+  }
+
+  public static func KindOf(job: Int32) -> EngramJobKind {
+    switch EngramNative.JobKind(job) {
+      case 1: return EngramJobKind.Share;
+      case 2: return EngramJobKind.Fetch;
+      case 3: return EngramJobKind.Write;
+      default: return EngramJobKind.None;
     };
   }
 

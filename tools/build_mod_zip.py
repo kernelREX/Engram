@@ -40,6 +40,14 @@ Move a Cyberpunk 2077 save to another PC by reading a code out loud.
 
 Open the main menu or the pause menu and pick Engram, next to Load Game.
 
+## Using it
+
+Open the main menu or the pause menu and pick Engram, next to Load Game.
+
+Share a save and you get a code to read out. Receive with a code and you type in
+the one somebody read to you. Both sides are shown the list of mods the save was
+made with before anything happens.
+
 ## Installing
 
 Extract into your Cyberpunk 2077 folder, the one with bin, r6 and archive in it.

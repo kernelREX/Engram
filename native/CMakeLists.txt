@@ -13,9 +13,9 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
   Engram
-  VERSION 0.1.0
+  VERSION 1.0.0
   DESCRIPTION "Carry a Cyberpunk 2077 save to another PC with a code"
-  LANGUAGES CXX
+  LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 20)
@@ -33,20 +33,40 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STR
 
 add_subdirectory(vendor/RED4ext.SDK)
 
-add_library(Engram SHARED
-  src/Main.cpp
-  src/Jobs.cpp
+# miniz for the container's zip, nlohmann/json for the manifest and the header. Both are
+# vendored so a build needs nothing fetched.
+add_library(engram_vendor STATIC vendor/miniz/miniz.c)
+target_include_directories(engram_vendor PUBLIC vendor/miniz)
+if(MSVC)
+  target_compile_options(engram_vendor PRIVATE /W0)
+endif()
+
+set(ENGRAM_CORE
+  src/Code.cpp
+  src/Container.cpp
+  src/Crypto.cpp
+  src/Http.cpp
+  src/Mods.cpp
+  src/SaveData.cpp
   src/SaveFolder.cpp
 )
 
-target_include_directories(Engram PRIVATE src)
+add_library(Engram SHARED
+  src/Main.cpp
+  src/Jobs.cpp
+  ${ENGRAM_CORE}
+)
+
+target_include_directories(Engram PRIVATE src vendor/json vendor/miniz)
+target_link_libraries(Engram PRIVATE engram_vendor)
 
 target_link_libraries(Engram PRIVATE
   RED4ext::SDK
   Shell32      # SHGetKnownFolderPath
   Ole32        # CoTaskMemFree
-  Winhttp      # the hosts, once phase 5 step 4 lands
-  Bcrypt       # AES-256-GCM and SHA-256, once step 2 lands
+  Winhttp      # the file hosts
+  Bcrypt       # AES-256-GCM, SHA-256 and PBKDF2
+  Version      # mod version resources
 )
 
 target_compile_definitions(Engram PRIVATE
@@ -67,9 +87,9 @@ set_target_properties(Engram PROPERTIES
 
 # A plain exe over the same sources, so the file reading can be checked on this machine
 # without starting the game. The RTTI binding still needs Cyberpunk to prove.
-add_executable(engram_harness tests/harness.cpp src/SaveFolder.cpp)
-target_include_directories(engram_harness PRIVATE src)
-target_link_libraries(engram_harness PRIVATE Shell32 Ole32)
+add_executable(engram_harness tests/harness.cpp ${ENGRAM_CORE})
+target_include_directories(engram_harness PRIVATE src vendor/json vendor/miniz)
+target_link_libraries(engram_harness PRIVATE engram_vendor Shell32 Ole32 Bcrypt Winhttp Version)
 target_compile_definitions(engram_harness PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 if(MSVC)
   target_compile_options(engram_harness PRIVATE /W4 /permissive- /EHsc /utf-8)

@@ -239,6 +239,41 @@ def compare_mods(sender: ModSet, receiver: ModSet, report: Report) -> None:
         )
 
 
+def mods_on_this_save(mods: ModSet) -> Finding:
+    """The alert both sides get: this save was made with mods, and here they are.
+
+    The sender sees it before they read the code out and the receiver sees it before
+    anything is written, so neither of them is surprised by what travelled.
+    """
+    if not len(mods):
+        return Finding(
+            severity=NOTE,
+            code="save-has-mods",
+            summary="this save was made with no mods installed",
+            detail="Nothing from a mod is inside it, so it will load on any machine "
+            "running the same patch.",
+        )
+
+    items = []
+    for entry in mods:
+        line = _label(entry)
+        if entry.writes_persistent_state:
+            line += "  [keeps state in the save]"
+        elif entry.extends_records:
+            line += "  [adds records]"
+        items.append(line)
+
+    return Finding(
+        severity=WARN,
+        code="save-has-mods",
+        summary=f"this save was made with {len(mods)} mod(s) installed",
+        detail="A modded save carries those mods' state inside sav.dat. Anyone loading it "
+        "without them gets a save that may behave differently, and the game disables "
+        "achievements for it. The full list is below.",
+        items=tuple(items),
+    )
+
+
 def check_save(
     slot_meta: dict,
     sender_mods: ModSet,
@@ -276,6 +311,9 @@ def check_save(
             f"The save is from game {build}. If your game is older than that, it will "
             "not load.",
         )
+
+    # What the save was made with, every time, whether or not it differs from here.
+    report.findings.append(mods_on_this_save(sender_mods))
 
     needs_pl = "EP1" in [str(i) for i in (slot_meta.get("additionalContentIds") or [])]
     if needs_pl and not receiver_mods.phantom_liberty:

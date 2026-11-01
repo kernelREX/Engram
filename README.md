@@ -24,11 +24,6 @@ read out to you.
 There is also a standalone tool for moving a save with no mod installed, no game running,
 or no network at all. It is described further down.
 
-> **Being built right now.** The menu, the popup and the save list are in and working. The
-> Share and Receive buttons behind them are not finished, and say so when you press them.
-> Until they are, use the standalone tool for the transfer itself. This note goes away when
-> that lands.
-
 ---
 
 ## Installing the mod
@@ -37,7 +32,7 @@ You need [RED4ext](https://www.nexusmods.com/cyberpunk2077/mods/2380) and
 [Codeware](https://www.nexusmods.com/cyberpunk2077/mods/7780). Most modded installs already
 have both.
 
-Extract `Engram-0.1.0.zip` into your Cyberpunk 2077 folder, the one with `bin`, `r6` and
+Extract `Engram-1.0.0.zip` into your Cyberpunk 2077 folder, the one with `bin`, `r6` and
 `archive` in it. Vortex and Mod Organizer handle the archive as it is.
 
 To remove it, delete these two folders:
@@ -46,6 +41,21 @@ To remove it, delete these two folders:
 red4ext/plugins/Engram
 r6/scripts/Engram
 ```
+
+---
+
+## You are always told what the save was made with
+
+Every save carries the list of mods that were installed when it was made, and both people
+see that list.
+
+**The sender** sees it before the code exists, so they can stop if they did not mean to
+share a modded save. **The receiver** sees it before anything is written, so they know what
+is inside the save they are about to load. Mods that keep state in the save and mods that
+add records are called out in the list, because those are the two that actually change what
+the save does on another machine.
+
+A save made with no mods says that plainly rather than saying nothing.
 
 ---
 
@@ -253,7 +263,7 @@ cd ..
 python tools/build_mod_zip.py
 ```
 
-That writes `dist/Engram-0.1.0.zip`. `tools/check_redscript.py` compiles the mod's
+That writes `dist/Engram-1.0.0.zip`. `tools/check_redscript.py` compiles the mod's
 redscript with the game's own compiler without launching Cyberpunk, which is worth running
 before any install, because a redscript mistake disables every mod on the next launch.
 

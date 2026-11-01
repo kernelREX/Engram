@@ -92,7 +92,8 @@ def test_a_version_difference_in_a_stateless_mod_is_only_a_note():
     receiver = mod_set(redscript("Byakko", "1.1.0", persistent=False))
     report = report_for(sender, receiver)
     assert "version-differs" in codes_of(report, NOTE)
-    assert not report.warnings
+    # The only warning is the standing alert that the save was made with mods at all.
+    assert codes_of(report, WARN) == {"save-has-mods"}
 
 
 def test_a_persistent_mod_with_no_version_on_either_side_is_flagged():
@@ -229,7 +230,7 @@ def test_an_identical_machine_reports_nothing_that_matters(tmp_path):
     found = modscan.scan(game)
     report = report_for(found, found)
     assert not report.blocked
-    assert not report.warnings
+    assert codes_of(report, WARN) == {"save-has-mods"}
 
 
 def test_the_summary_leads_with_the_worst_thing():
@@ -255,3 +256,50 @@ def test_local_game_version_comes_from_the_newest_save(save_dir):
 
 def test_local_game_version_is_unknown_with_no_saves(save_dir):
     assert compare.local_game_version(save_dir) is None
+
+
+# ------------------------------------------------------- the alert about what travelled
+
+
+def test_a_modded_save_is_always_flagged_with_its_mod_list():
+    """Both sides are told, whether or not the two machines differ."""
+    sender = mod_set(
+        redscript("Cyberbane", "1.4.5", persistent=True),
+        archive("Atlas", records=True),
+    )
+    report = report_for(sender, sender)
+    alert = next(f for f in report.findings if f.code == "save-has-mods")
+
+    assert alert.severity == WARN
+    assert "2 mod(s)" in alert.summary
+    assert any("Cyberbane" in item for item in alert.items)
+    assert any("keeps state in the save" in item for item in alert.items)
+    assert any("adds records" in item for item in alert.items)
+
+
+def test_an_unmodded_save_says_so_rather_than_saying_nothing():
+    report = report_for(mod_set(), mod_set())
+    alert = next(f for f in report.findings if f.code == "save-has-mods")
+    assert alert.severity == NOTE
+    assert "no mods" in alert.summary
+    assert not alert.items
+
+
+def test_the_alert_lists_every_mod_not_just_the_differing_ones():
+    sender = mod_set(
+        redscript("Cyberbane", "1.4.5", persistent=True),
+        redscript("Byakko", "1.0.0"),
+        plugin("ArchiveXL", "1.28.6"),
+    )
+    alert = compare.mods_on_this_save(sender)
+    assert len(alert.items) == 3
+
+
+def test_the_alert_is_built_the_same_way_for_the_sender_and_the_receiver():
+    """The sender sees it before reading the code out; the receiver before writing."""
+    sender = mod_set(redscript("Cyberbane", "1.4.5", persistent=True))
+    standalone = compare.mods_on_this_save(sender)
+    in_report = next(
+        f for f in report_for(sender, mod_set()).findings if f.code == "save-has-mods"
+    )
+    assert standalone == in_report
