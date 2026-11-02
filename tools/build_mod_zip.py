@@ -108,9 +108,9 @@ def installed_in_game() -> bool:
     return any((game.path / "r6" / "scripts" / "Engram").glob("*.reds"))
 
 
-def check_redscript() -> bool:
+def run_check(script: str, *args: str) -> bool:
     completed = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "check_redscript.py"), "--only", "Engram"],
+        [sys.executable, str(ROOT / "tools" / script), *args],
         capture_output=True,
         text=True,
     )
@@ -118,6 +118,19 @@ def check_redscript() -> bool:
     if completed.returncode != 0:
         sys.stdout.write(completed.stderr)
     return completed.returncode == 0
+
+
+def check_redscript() -> bool:
+    """Everything that can go wrong between the scripts and the plugin.
+
+    The compiler only catches the first of these. A native that is declared but not
+    registered stops the game starting, and a callback handler with the wrong signature is
+    never called at all, and neither shows up as a compile error.
+    """
+    ok = run_check("check_redscript.py", "--only", "Engram")
+    ok = run_check("check_natives.py") and ok
+    ok = run_check("check_callbacks.py") and ok
+    return ok
 
 
 def build(out_dir: Path, skip_check: bool) -> Path:

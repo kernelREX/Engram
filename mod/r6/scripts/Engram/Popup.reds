@@ -33,6 +33,7 @@ public class EngramPopup extends InMenuPopup {
   private let m_job: Int32;
   private let m_fetchJob: Int32;
   private let m_requester: wref<inkGameController>;
+  private let m_ticker: wref<inkCanvas>;
   private let m_poll: ref<inkAnimProxy>;
   private let m_token: ref<inkGameNotificationToken>;
 
@@ -55,8 +56,18 @@ public class EngramPopup extends InMenuPopup {
     body.SetChildMargin(inkMargin(0.0, 5.0, 0.0, 5.0));
     body.SetHAlign(inkEHorizontalAlign.Left);
     body.SetMargin(inkMargin(40.0, 16.0, 40.0, 16.0));
+    body.SetInteractive(true);
     body.Reparent(this.m_content.GetContainerWidget());
     this.m_body = body;
+
+    // The clock the busy pages run on. One pixel, fully transparent, never cleared, and
+    // outside the body so rebuilding a page cannot take it away mid job.
+    let ticker = new inkCanvas();
+    ticker.SetName(n"engramTicker");
+    ticker.SetSize(Vector2(1.0, 1.0));
+    ticker.SetOpacity(0.0);
+    ticker.Reparent(this.m_content.GetContainerWidget());
+    this.m_ticker = ticker;
 
     let footer = InMenuPopupFooter.Create();
     footer.Reparent(this);
@@ -302,8 +313,19 @@ public class EngramPopup extends InMenuPopup {
 
   // ------------------------------------------------------------------------- the buttons
 
-  protected cb func OnButton(controller: wref<inkButtonController>) -> Bool {
-    let name = NameToString(controller.GetRootWidget().GetName());
+  // Codeware's buttons fire this through inkWidget.CallCustomCallback, which hands the
+  // handler the button's own root widget. The parameter type has to be exactly that:
+  // redscript matches callbacks by signature, so a handler taking anything else is never
+  // called and the button silently does nothing. Codeware's own OnConfirmClick and
+  // OnCancelClick take wref<inkWidget> for the same reason.
+  //
+  // The widget carries the name set by SimpleButton.SetName, which is how the press is
+  // told apart from every other button on the page.
+  protected cb func OnButton(widget: wref<inkWidget>) -> Bool {
+    if !IsDefined(widget) {
+      return true;
+    };
+    let name = NameToString(widget.GetName());
 
     if Equals(name, "home") {
       this.GoHome();
@@ -372,12 +394,24 @@ public class EngramPopup extends InMenuPopup {
 
   // ------------------------------------------------------ watching a job without stalling
 
+  // A looping animation is the clock. There is no timer a pregame menu can rely on, and the
+  // work is happening on a thread in the plugin, so something has to ask it how it is going
+  // once a frame or so.
+  //
+  // It runs on its own one pixel widget rather than on the body. The body has its children
+  // torn out and rebuilt on every page change, and an animation that touched its opacity
+  // would be visible. The endpoints differ by a hundredth because an interpolation from a
+  // value to itself is not guaranteed to produce the loop events this depends on.
   private func StartPolling() -> Void {
     this.StopPolling();
 
+    if !IsDefined(this.m_ticker) {
+      return;
+    };
+
     let interpolator = new inkAnimTransparency();
-    interpolator.SetStartTransparency(1.0);
-    interpolator.SetEndTransparency(1.0);
+    interpolator.SetStartTransparency(0.0);
+    interpolator.SetEndTransparency(0.01);
     interpolator.SetDuration(0.2);
 
     let definition = new inkAnimDef();
@@ -387,7 +421,7 @@ public class EngramPopup extends InMenuPopup {
     options.loopInfinite = true;
     options.loopType = inkanimLoopType.Cycle;
 
-    this.m_poll = this.m_body.PlayAnimationWithOptions(definition, options);
+    this.m_poll = this.m_ticker.PlayAnimationWithOptions(definition, options);
     this.m_poll.RegisterToCallback(inkanimEventType.OnEndLoop, this, n"OnPoll");
   }
 
