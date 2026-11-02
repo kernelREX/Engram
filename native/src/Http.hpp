@@ -18,8 +18,9 @@ struct UploadResult
 // Says what we are and where to find us. Several hosts refuse a default library agent.
 std::string UserAgent();
 
-// Put a container on one host. One attempt, no retry loop.
-UploadResult Upload(const Host& aHost, const Bytes& aContent);
+// Put a container on one host, asking it to keep the file for `aHours`. One attempt,
+// no retry loop.
+UploadResult Upload(const Host& aHost, const Bytes& aContent, int aHours);
 
 Bytes Download(const Host& aHost, const std::string& aFileId);
 } // namespace engram

@@ -32,7 +32,7 @@ public native class EngramNative extends IScriptable {
   public static native func SaveFolder() -> String
   public static native func SaveNames() -> array<String>
 
-  public static native func StartShare(saveName: String) -> Int32
+  public static native func StartShare(saveName: String, hours: Int32) -> Int32
   public static native func StartFetch(code: String) -> Int32
   public static native func StartWrite(fetchJob: Int32, force: Bool) -> Int32
 

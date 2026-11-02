@@ -408,3 +408,28 @@ def test_an_unmodded_save_is_called_that_on_both_sides(tmp_path):
     assert "no mods" in summary.lower()
     assert "no mods" in compare.mods_on_this_save(ModSet()).summary
     assert len(spoken) == 1
+
+
+# ---------------------------------------------------------------- the chosen expiry
+
+@pytest.mark.parametrize("hours", [1, 2, 5, 11, 12, 13, 24, 25, 48, 72, 100, 1000])
+def test_both_spell_a_chosen_lifetime_the_same_way(hours):
+    """A disagreement means one side asks a host for a lifetime it refuses."""
+    for host in spec.HOSTS:
+        mine = host.expiry_spelling(hours)
+        theirs = native("expiry", host.key, str(hours))
+        assert mine == theirs, f"{host.key} at {hours}h: {mine} != {theirs}"
+
+
+def test_litterbox_only_ever_gets_a_value_it_accepts():
+    """Litterbox takes 1h, 12h, 24h and 72h and refuses anything else."""
+    allowed = {"1h", "12h", "24h", "72h"}
+    for hours in range(0, 200):
+        assert spec.LITTERBOX.expiry_spelling(hours) in allowed
+
+
+def test_a_shorter_choice_is_never_rounded_up_past_the_next_step():
+    assert spec.LITTERBOX.expiry_spelling(1) == "1h"
+    assert spec.LITTERBOX.expiry_spelling(2) == "12h"
+    assert spec.LITTERBOX.expiry_spelling(13) == "24h"
+    assert spec.LITTERBOX.expiry_spelling(25) == "72h"

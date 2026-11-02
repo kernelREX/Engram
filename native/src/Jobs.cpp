@@ -95,6 +95,21 @@ int32_t Begin(engram::JobKind aKind, std::function<void(Job&)> aWork)
     return id;
 }
 
+// "1 hour", "12 hours", "3 days": what the sender chose, in words.
+std::string DescribeHours(int aHours)
+{
+    if (aHours <= 1)
+    {
+        return "1 hour";
+    }
+    if (aHours % 24 == 0)
+    {
+        const int days = aHours / 24;
+        return std::to_string(days) + (days == 1 ? " day" : " days");
+    }
+    return std::to_string(aHours) + " hours";
+}
+
 std::string NowIso()
 {
     const auto now = std::chrono::system_clock::now();
@@ -224,7 +239,7 @@ void SetGameDir(const std::filesystem::path& aPath)
     g_gameDir = aPath;
 }
 
-int32_t StartShare(const std::string& aSaveName)
+int32_t StartShare(const std::string& aSaveName, int aHours)
 {
     if (aSaveName.empty())
     {
@@ -233,7 +248,7 @@ int32_t StartShare(const std::string& aSaveName)
 
     return Begin(
         JobKind::Share,
-        [aSaveName](Job& job)
+        [aSaveName, aHours](Job& job)
         {
             const auto root = SaveFolder();
             const auto folder = root / aSaveName;
@@ -281,14 +296,14 @@ int32_t StartShare(const std::string& aSaveName)
                 Say(job, "Uploading to " + host.label);
                 try
                 {
-                    const UploadResult result = Upload(host, blob);
+                    const UploadResult result = Upload(host, blob, aHours);
                     const std::string code = FormatCode(host, result.fileId, secret);
 
                     std::lock_guard<std::mutex> lock(g_mutex);
                     job.report.code = code;
                     job.report.state = JobState::Done;
-                    job.report.message = "Uploaded to " + host.label + ", which keeps it for " +
-                                         (host.expiry.empty() ? "a while" : host.expiry) + ".";
+                    job.report.message = "Uploaded to " + host.label + ". The code stops "
+                                         "working after " + DescribeHours(aHours) + ".";
                     return;
                 }
                 catch (const std::exception& exc)

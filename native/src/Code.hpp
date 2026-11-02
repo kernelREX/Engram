@@ -36,6 +36,10 @@ struct Host
     int idWidth;       // -1 when the host's ids vary in length
     uint64_t maxBytes;
 
+    // How this host spells a lifetime of `aHours`. Litterbox wants "72h", 0x0.st wants
+    // "72". Values outside what a host accepts are pulled to the nearest one it does.
+    std::string ExpirySpelling(int aHours) const;
+
     std::string UrlFor(const std::string& aId) const;
     std::string IdFromUrl(const std::string& aUrl) const;
     size_t CharsForIdOfLength(size_t aLength) const;

@@ -158,6 +158,35 @@ void ValidateId(const Host& aHost, const std::string& aId)
 }
 } // namespace
 
+std::string Host::ExpirySpelling(int aHours) const
+{
+    // Litterbox takes only these four, so anything else is pulled up to the next one it
+    // accepts rather than silently becoming something the host rejects.
+    static const int kLitterboxSteps[] = {1, 12, 24, 72};
+
+    int hours = aHours;
+    if (key == "litterbox")
+    {
+        hours = kLitterboxSteps[0];
+        for (const int step : kLitterboxSteps)
+        {
+            if (aHours <= step)
+            {
+                hours = step;
+                break;
+            }
+            hours = step;
+        }
+        return std::to_string(hours) + "h";
+    }
+
+    if (hours < 1)
+    {
+        hours = 1;
+    }
+    return std::to_string(hours);
+}
+
 std::string Host::UrlFor(const std::string& aId) const
 {
     const auto at = urlTemplate.find("{id}");

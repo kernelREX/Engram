@@ -40,6 +40,20 @@ class HostSpec:
     expiry: str = ""
     note: str = ""
 
+    def expiry_spelling(self, hours: int) -> str:
+        """How this host spells a lifetime of `hours`.
+
+        Litterbox wants "72h" and only accepts 1, 12, 24 and 72, so anything else is
+        pulled up to the next value it does accept rather than being refused. 0x0.st takes
+        a plain number of hours.
+        """
+        if self.key == "litterbox":
+            for step in (1, 12, 24, 72):
+                if hours <= step:
+                    return f"{step}h"
+            return "72h"
+        return str(max(1, hours))
+
     def replace(self, **changes) -> "HostSpec":
         """A copy with some fields overridden, for the config file to adjust a host."""
         return replace(self, **changes)

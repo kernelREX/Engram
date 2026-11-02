@@ -142,8 +142,9 @@ bool ReadBool(RED4ext::CStackFrame* aFrame)
 void StartShare(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
 {
     const auto name = ReadString(aFrame);
+    const auto hours = ReadInt(aFrame);
     aFrame->code++;
-    const auto job = engram::StartShare(name.c_str() ? name.c_str() : "");
+    const auto job = engram::StartShare(name.c_str() ? name.c_str() : "", hours);
     if (aOut)
     {
         *aOut = job;
@@ -310,7 +311,7 @@ RED4EXT_C_EXPORT void RED4EXT_CALL PostRegisterTypes()
     };
 
     const Native natives[] = {
-        {"StartShare", &StartShare, "Int32", {"String"}},
+        {"StartShare", &StartShare, "Int32", {"String", "Int32"}},
         {"StartFetch", &StartFetch, "Int32", {"String"}},
         {"StartWrite", &StartWrite, "Int32", {"Int32", "Bool"}},
         {"JobState", &JobState, "Int32", {"Int32"}},

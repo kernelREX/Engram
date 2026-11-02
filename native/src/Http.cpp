@@ -259,7 +259,7 @@ std::string UserAgent()
     return std::string("Engram/") + kEngramVersion + " (+https://github.com/tfthushaar/Engram)";
 }
 
-UploadResult Upload(const Host& aHost, const Bytes& aContent)
+UploadResult Upload(const Host& aHost, const Bytes& aContent, int aHours)
 {
     if (aContent.size() > aHost.maxBytes)
     {
@@ -285,15 +285,12 @@ UploadResult Upload(const Host& aHost, const Bytes& aContent)
     if (aHost.key == "litterbox")
     {
         fields.push_back({"reqtype", "fileupload"});
-        fields.push_back({"time", aHost.expiry.empty() ? "72h" : aHost.expiry});
+        fields.push_back({"time", aHost.ExpirySpelling(aHours)});
     }
     else
     {
         fileField = "file";
-        if (!aHost.expiry.empty())
-        {
-            fields.push_back({"expires", aHost.expiry});
-        }
+        fields.push_back({"expires", aHost.ExpirySpelling(aHours)});
     }
 
     std::string head;

@@ -301,9 +301,11 @@ def cmd_share(ctx: Context) -> int:
             raise Abort(str(exc)) from None
 
         ui.field("sealed", f"{ui.megabytes(len(blob))}, AES-256-GCM")
-        ui.say(f"  uploading to {host.label}, which keeps it for {host.expiry or 'a while'}")
+        hours = max(1, getattr(ctx.args, "expiry", 72))
+        spelled = host.expiry_spelling(hours)
+        ui.say(f"  uploading to {host.label}, which will keep it for {spelled}")
         try:
-            result = upload(host, blob)
+            result = upload(host, blob, hours)
         except HostError as exc:
             last_error = str(exc)
             ui.warn(f"  {host.label}: {exc}")
@@ -316,7 +318,7 @@ def cmd_share(ctx: Context) -> int:
         ui.say("  " + ui.paint(ui.spoken(code), "dim"))
         ui.say()
         ui.field("host", host.label)
-        ui.field("expires", host.expiry or "per the host's policy")
+        ui.field("expires", _in_words(hours))
         ui.field("they run", f"engram get {code}")
         if result.delete_token:
             ui.field("delete token", result.delete_token)
@@ -482,6 +484,16 @@ def cmd_gui(ctx: Context) -> int:
 # --------------------------------------------------------------------------- plumbing
 
 
+def _in_words(hours: int) -> str:
+    """"1 hour", "12 hours", "3 days": what the sender chose, in words."""
+    if hours <= 1:
+        return "1 hour"
+    if hours % 24 == 0:
+        days = hours // 24
+        return f"{days} day" if days == 1 else f"{days} days"
+    return f"{hours} hours"
+
+
 def _clean_secret(secret: str | None) -> str | None:
     if not secret:
         return None
@@ -561,6 +573,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     share.add_argument("save", nargs="?", help="a save name, or the newest one by default")
     share.add_argument("--host", help="upload to this host rather than the first that works")
+    share.add_argument(
+        "--expiry",
+        type=int,
+        default=72,
+        metavar="HOURS",
+        help="how long the code should keep working, in hours (default 72, the longest "
+        "Litterbox allows). Shorter is safer.",
+    )
     share.set_defaults(run=cmd_share)
 
     get = subparsers.add_parser(

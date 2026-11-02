@@ -44,8 +44,9 @@ struct JobReport
 // Where the game is installed, so the mod scan knows where to look. Set once at load.
 void SetGameDir(const std::filesystem::path& aPath);
 
-// Start packing and uploading a save. Returns a job id, or 0 if it could not start.
-int32_t StartShare(const std::string& aSaveName);
+// Start packing and uploading a save, asking the host to keep it for `aHours`.
+// Returns a job id, or 0 if it could not start.
+int32_t StartShare(const std::string& aSaveName, int aHours);
 
 // Start fetching and opening the save a code points at.
 int32_t StartFetch(const std::string& aCode);

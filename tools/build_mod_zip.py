@@ -44,9 +44,12 @@ Open the main menu or the pause menu and pick Engram, next to Load Game.
 
 Open the main menu or the pause menu and pick Engram, next to Load Game.
 
-Share a save and you get a code to read out. Receive with a code and you type in
+Share a save and you get a code to read out. You choose how long that code
+lasts: 1 hour, 12 hours, 1 day or 3 days. Receive with a code and you type in
 the one somebody read to you. Both sides are shown the list of mods the save was
 made with before anything happens.
+
+There is no account of any kind. No mod.io, no logins, nothing to sign up for.
 
 ## Installing
 

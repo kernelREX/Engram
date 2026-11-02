@@ -54,13 +54,13 @@ def _id_from(host: HostSpec, url: str) -> str:
     return file_id
 
 
-def upload_litterbox(host: HostSpec, content: bytes) -> Upload:
+def upload_litterbox(host: HostSpec, content: bytes, hours: int = 72) -> Upload:
     """Litterbox takes an anonymous multipart post and expires the file on a timer."""
     _check_size(host, content)
     try:
         response = net.post_multipart(
             host.upload_url,
-            fields={"reqtype": "fileupload", "time": host.expiry or "72h"},
+            fields={"reqtype": "fileupload", "time": host.expiry_spelling(hours)},
             file_field="fileToUpload",
             filename=host.upload_filename,
             content=content,
@@ -77,12 +77,10 @@ def upload_litterbox(host: HostSpec, content: bytes) -> Upload:
     return Upload(host=host, file_id=_id_from(host, url), url=url)
 
 
-def upload_nullpointer(host: HostSpec, content: bytes) -> Upload:
+def upload_nullpointer(host: HostSpec, content: bytes, hours: int = 72) -> Upload:
     """0x0.st takes the same shape of post and hands back a deletion token in a header."""
     _check_size(host, content)
-    fields = {}
-    if host.expiry:
-        fields["expires"] = host.expiry
+    fields = {"expires": host.expiry_spelling(hours)}
     try:
         response = net.post_multipart(
             host.upload_url,
@@ -115,12 +113,15 @@ UPLOADERS = {
 }
 
 
-def upload(host: HostSpec, content: bytes) -> Upload:
-    """Put a container on one host. One attempt, no retry loop."""
+def upload(host: HostSpec, content: bytes, hours: int = 72) -> Upload:
+    """Put a container on one host, asking it to keep the file for `hours`.
+
+    One attempt, no retry loop.
+    """
     uploader = UPLOADERS.get(host.key)
     if uploader is None:
         raise HostError(f"no uploader for {host.key!r}")
-    return uploader(host, content)
+    return uploader(host, content, hours)
 
 
 def download(host: HostSpec, file_id: str) -> bytes:

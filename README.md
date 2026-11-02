@@ -17,9 +17,11 @@ is close enough to what this does to a save.
 
 ## Where to find it
 
-Install the mod and **Engram** appears in the main menu and the pause menu, next to Load
-Game. Everything happens from there: pick a save, get a code, or type in a code somebody
-read out to you.
+Install the mod and **Engram** appears in the main menu and the pause menu, just after the
+Mods entry. Everything happens from there: pick a save, get a code, or type in a code
+somebody read out to you.
+
+Engram has no account of any kind. No mod.io, no logins, nothing to sign up for.
 
 There is also a standalone tool for moving a save with no mod installed, no game running,
 or no network at all. It is described further down.
@@ -117,8 +119,12 @@ read your save, and neither can anybody who stumbles across the link without the
 The trade is that the code is the only copy of the key. Lose the code and the save is
 gone. That is the correct behaviour for a thing whose whole purpose is a code.
 
-Files expire from the host after 72 hours. A code that has stopped working has usually
-just run out.
+**You choose how long the code lasts.** After picking a save you pick a lifetime: 1 hour,
+12 hours, 1 day, or 3 days. The file is removed from the host when it runs out and the code
+stops working. Shorter is safer, and 3 days is the longest the host allows. From the
+standalone tool it is `--expiry`, in hours.
+
+A code that has stopped working has usually just run out.
 
 One thing worth saying plainly: `sav.dat` is a binary going into the game's own loader.
 Engram checks that the file matches the hashes the sender recorded and that it starts like
@@ -186,7 +192,7 @@ engram gui
 
 | Command | What it does |
 |---|---|
-| `engram share [save]` | Upload a save and print a code. Uses the newest save if you name none. |
+| `engram share [save]` | Upload a save and print a code. Uses the newest save if you name none. `--expiry HOURS` sets how long it lasts. |
 | `engram get <code>` | Fetch a save from a code, check it, and write it. |
 | `engram pack [save]` | Write a save to a `.engram` file. |
 | `engram unpack <file>` | Write a save back out of a `.engram` file. |
@@ -204,6 +210,10 @@ Useful flags: `--dry-run` to check without writing, `--force` to go ahead past a
 ---
 
 ## When something is not right
+
+**It asked me to sign in to mod.io.** That is not Engram. Engram uses no account at all.
+If you see it, something has moved the main menu's entries around, because the game
+hardcodes the position of its own mod.io button. Report it with your mod list.
 
 **Engram is not in the menu.** Check that `red4ext/plugins/Engram/Engram.dll` and
 `r6/scripts/Engram/` both exist, and that RED4ext and Codeware are installed. If the game

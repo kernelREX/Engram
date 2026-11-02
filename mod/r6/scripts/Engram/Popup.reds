@@ -16,11 +16,12 @@ import Codeware.UI.*
 enum EngramPage {
   Home = 0,
   Saves = 1,
-  Busy = 2,
-  Shared = 3,
-  Incoming = 4,
-  Written = 5,
-  Failed = 6,
+  Expiry = 2,
+  Busy = 3,
+  Shared = 4,
+  Incoming = 5,
+  Written = 6,
+  Failed = 7,
 }
 
 public class EngramPopup extends InMenuPopup {
@@ -28,6 +29,7 @@ public class EngramPopup extends InMenuPopup {
   private let m_body: wref<inkVerticalPanel>;
   private let m_page: EngramPage;
   private let m_saves: array<String>;
+  private let m_picked: String;
   private let m_job: Int32;
   private let m_fetchJob: Int32;
   private let m_requester: wref<inkGameController>;
@@ -160,6 +162,21 @@ public class EngramPopup extends InMenuPopup {
       this.Quiet(s"and \(ArraySize(this.m_saves) - shown) older save(s), not shown");
     };
     this.Button("Back", n"home");
+  }
+
+  // How long the code should keep working. Litterbox only accepts these four, so they are
+  // what the sender is offered rather than a free number that the host would refuse.
+  private func GoExpiry() -> Void {
+    this.m_page = EngramPage.Expiry;
+    this.Clear();
+    this.Say(this.m_picked);
+    this.Quiet("How long should the code keep working? It stops by itself afterwards, and");
+    this.Quiet("the save is removed from the host. Shorter is safer.");
+    this.Button("1 hour", n"hours:1");
+    this.Button("12 hours", n"hours:12");
+    this.Button("1 day", n"hours:24");
+    this.Button("3 days, the longest", n"hours:72");
+    this.Button("Back", n"share");
   }
 
   private func GoBusy(what: String) -> Void {
@@ -308,8 +325,14 @@ public class EngramPopup extends InMenuPopup {
               if StrBeginsWith(name, "save:") {
                 let index = StringToInt(StrAfterFirst(name, "save:"));
                 if index >= 0 && index < ArraySize(this.m_saves) {
-                  this.m_job = EngramNative.StartShare(this.m_saves[index]);
-                  this.GoBusy(s"Packing and uploading \(this.m_saves[index])");
+                  this.m_picked = this.m_saves[index];
+                  this.GoExpiry();
+                };
+              } else {
+                if StrBeginsWith(name, "hours:") {
+                  let hours = StringToInt(StrAfterFirst(name, "hours:"));
+                  this.m_job = EngramNative.StartShare(this.m_picked, hours);
+                  this.GoBusy(s"Packing and uploading \(this.m_picked)");
                 };
               };
             };

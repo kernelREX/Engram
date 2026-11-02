@@ -136,6 +136,18 @@ int main(int argc, char** argv)
             return 0;
         }
 
+        if (command == "expiry" && args.size() >= 3)
+        {
+            const auto* host = engram::HostByKey(args[1]);
+            if (!host)
+            {
+                std::cout << "unknown host\n";
+                return 1;
+            }
+            std::cout << host->ExpirySpelling(std::stoi(args[2])) << "\n";
+            return 0;
+        }
+
         if (command == "mods" && args.size() >= 2)
         {
             const auto mods = engram::ScanMods(args[1]);
