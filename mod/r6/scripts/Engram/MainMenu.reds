@@ -9,7 +9,6 @@
 
 module Engram.MainMenu
 
-import Engram.*
 import Engram.Popup.*
 
 @addField(gameuiMenuItemListGameController)

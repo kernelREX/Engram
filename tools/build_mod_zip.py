@@ -88,6 +88,23 @@ def staleness(dll: Path, sources: list[Path]) -> list[Path]:
     return [s for s in sources if s.stat().st_mtime > built]
 
 
+def installed_in_game() -> bool:
+    """Whether the mod's scripts are in the game folder for the compile check to see.
+
+    The compiler is pointed at the game's own r6/scripts. If the mod is not deployed there,
+    `--only Engram` finds no Engram errors and reports success without having checked
+    anything, which is a false pass worth refusing.
+    """
+    sys.path.insert(0, str(ROOT))
+    from engram.paths import LocationError, find_game_dir
+
+    try:
+        game = find_game_dir()
+    except LocationError:
+        return False
+    return any((game.path / "r6" / "scripts" / "Engram").glob("*.reds"))
+
+
 def check_redscript() -> bool:
     completed = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "check_redscript.py"), "--only", "Engram"],
@@ -121,6 +138,13 @@ def build(out_dir: Path, skip_check: bool) -> Path:
 
     if skip_check:
         print("skipping the redscript check")
+    elif not installed_in_game():
+        raise SystemExit(
+            "the mod is not deployed in the game folder, so compiling against it would "
+            "check nothing and pass anyway. Deploy it first:\n"
+            "  cmake --install native/build --config Release\n"
+            "or pass --skip-check if you know there is nothing to check against."
+        )
     elif not check_redscript():
         raise SystemExit(
             "the redscript does not compile, so this archive would disable every mod on "

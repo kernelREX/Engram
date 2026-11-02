@@ -11,7 +11,6 @@
 
 module Engram.Popup
 
-import Engram.*
 import Codeware.UI.*
 
 enum EngramPage {
