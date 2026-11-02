@@ -151,6 +151,46 @@ void StartShare(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aO
     }
 }
 
+void StartPackToFile(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut,
+                     int64_t)
+{
+    const auto name = ReadString(aFrame);
+    aFrame->code++;
+    const auto job = engram::StartPackToFile(name.c_str() ? name.c_str() : "");
+    if (aOut)
+    {
+        *aOut = job;
+    }
+}
+
+void StartOpenFile(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
+{
+    const auto name = ReadString(aFrame);
+    aFrame->code++;
+    const auto job = engram::StartOpenFile(name.c_str() ? name.c_str() : "");
+    if (aOut)
+    {
+        *aOut = job;
+    }
+}
+
+void GetPackedFiles(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame,
+                    RED4ext::DynArray<RED4ext::CString>* aOut, int64_t)
+{
+    aFrame->code++;
+    if (!aOut)
+    {
+        return;
+    }
+    const auto names = engram::PackedFiles();
+    aOut->Clear();
+    aOut->Reserve(static_cast<uint32_t>(names.size()));
+    for (const auto& name : names)
+    {
+        aOut->PushBack(RED4ext::CString(name.c_str()));
+    }
+}
+
 void StartFetch(RED4ext::IScriptable*, RED4ext::CStackFrame* aFrame, int32_t* aOut, int64_t)
 {
     const auto code = ReadString(aFrame);
@@ -313,6 +353,9 @@ RED4EXT_C_EXPORT void RED4EXT_CALL PostRegisterTypes()
     const Native natives[] = {
         {"StartShare", &StartShare, "Int32", {"String", "Int32"}},
         {"StartFetch", &StartFetch, "Int32", {"String"}},
+        {"StartPackToFile", &StartPackToFile, "Int32", {"String"}},
+        {"StartOpenFile", &StartOpenFile, "Int32", {"String"}},
+        {"PackedFiles", &GetPackedFiles, "array:String", {}},
         {"StartWrite", &StartWrite, "Int32", {"Int32", "Bool"}},
         {"JobState", &JobState, "Int32", {"Int32"}},
         {"JobKind", &JobKind, "Int32", {"Int32"}},
@@ -367,6 +410,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             engram::SetGameDir(
                 std::filesystem::path(modulePath).parent_path().parent_path().parent_path().parent_path());
         }
+
+        engram::SetLogger([](const std::string& message) { Log(message); });
 
         auto* rtti = RED4ext::CRTTISystem::Get();
         rtti->AddRegisterCallback(RegisterTypes);

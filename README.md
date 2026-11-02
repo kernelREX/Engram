@@ -119,6 +119,13 @@ read your save, and neither can anybody who stumbles across the link without the
 The trade is that the code is the only copy of the key. Lose the code and the save is
 gone. That is the correct behaviour for a thing whose whole purpose is a code.
 
+**There is a route that needs no host at all.** When you share, the last option is
+**Save to a file instead**. It writes a `.engram` file into an Engram folder beside your
+Cyberpunk saves. Move that file to the other PC however you like, drop it in the same
+folder there, and pick **Open a file someone sent**. Same checks, same mod list, no
+network and nobody else's server involved. The hosts are free services run by volunteers
+and they do go down, so this is worth knowing about before you need it.
+
 **You choose how long the code lasts.** After picking a save you pick a lifetime: 1 hour,
 12 hours, 1 day, or 3 days. The file is removed from the host when it runs out and the code
 stops working. Shorter is safer, and 3 days is the longest the host allows. From the
@@ -228,8 +235,9 @@ an install. Point it at the right place with `--game-dir`.
 codes last 72 hours. If it downloads and then says the secret did not open it, the last
 eight characters are wrong.
 
-**A host refuses to take the file.** Engram knows more than one, and tries the next one by
-itself. Which host a code is on is baked into its first character, so old codes keep
+**A host refuses to take the file.** Engram knows more than one and tries the next by
+itself, and tells you what each one said rather than only the last. If both refuse, use
+**Save to a file instead**, which needs no host. Which host a code is on is baked into its first character, so old codes keep
 working when the default changes. If both are down, `engram pack` still works and needs
 nothing but a USB stick.
 

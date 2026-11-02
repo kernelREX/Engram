@@ -66,6 +66,11 @@ std::filesystem::path SaveFolder()
     return root / kSaveSubPath;
 }
 
+std::filesystem::path FileFolder()
+{
+    return SaveFolder().parent_path().parent_path() / "Engram";
+}
+
 std::vector<std::string> ListSaveFolders(const std::filesystem::path& aRoot)
 {
     std::error_code error;

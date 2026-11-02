@@ -1,7 +1,9 @@
 #include "Jobs.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -41,6 +43,9 @@ int32_t g_next = 1;
 
 std::filesystem::path g_gameDir;
 std::mutex g_gameMutex;
+
+std::function<void(const std::string&)> g_logger;
+std::mutex g_loggerMutex;
 
 std::shared_ptr<Job> Find(int32_t aId)
 {
@@ -233,6 +238,25 @@ bool ProcessRunning(const wchar_t* aName);
 
 namespace engram
 {
+void SetLogger(std::function<void(const std::string&)> aSink)
+{
+    std::lock_guard<std::mutex> lock(g_loggerMutex);
+    g_logger = std::move(aSink);
+}
+
+void Log(const std::string& aMessage)
+{
+    std::function<void(const std::string&)> sink;
+    {
+        std::lock_guard<std::mutex> lock(g_loggerMutex);
+        sink = g_logger;
+    }
+    if (sink)
+    {
+        sink(aMessage);
+    }
+}
+
 void SetGameDir(const std::filesystem::path& aPath)
 {
     std::lock_guard<std::mutex> lock(g_gameMutex);
@@ -281,7 +305,10 @@ int32_t StartShare(const std::string& aSaveName, int aHours)
             const std::string manifest = BuildManifest(info, metadata, mods, files);
             const std::string secret = NewSecret();
 
-            std::string lastError;
+            // Every host that refuses gets reported, not just the last one. The first
+            // version kept only the final error, so a share that failed on both hosts said
+            // only that the second one was having trouble and never mentioned the first.
+            std::vector<std::string> refusals;
             for (const auto& host : Hosts())
             {
                 if (job.cancelled)
@@ -293,6 +320,8 @@ int32_t StartShare(const std::string& aSaveName, int aHours)
                 Say(job, "Packing and sealing the save");
                 const Bytes blob = Pack(manifest, files, secret, host.key);
 
+                Log("share: uploading " + std::to_string(blob.size()) +
+                    " bytes to " + host.label + " for " + DescribeHours(aHours));
                 Say(job, "Uploading to " + host.label);
                 try
                 {
@@ -308,12 +337,229 @@ int32_t StartShare(const std::string& aSaveName, int aHours)
                 }
                 catch (const std::exception& exc)
                 {
-                    lastError = exc.what();
+                    refusals.push_back(host.label + ": " + exc.what());
+                    Log("share: " + host.label + " refused: " + exc.what());
                 }
             }
 
-            Finish(job, JobState::Failed,
-                   lastError.empty() ? "No host would take the file." : lastError);
+            {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                job.report.state = JobState::Failed;
+                job.report.message =
+                    refusals.empty()
+                        ? "No host would take the file."
+                        : "No host would take the file. Both were asked:";
+                for (const auto& refusal : refusals)
+                {
+                    job.report.findings.push_back(refusal);
+                }
+                job.report.findings.push_back(
+                    "The save is still on this machine and nothing was changed. The hosts "
+                    "are free services and do go down. Try again later, or use the Engram "
+                    "tool outside the game, which can also write the save to a file and "
+                    "move it on a USB stick with no host at all.");
+            }
+        });
+}
+
+namespace
+{
+// Everything an incoming container goes through before the receiver is shown anything.
+// Shared by a fetched code and an opened file, because the two differ only in where the
+// bytes came from and must otherwise be judged identically.
+void AcceptBundle(Job& aJob, const Bundle& aBundle)
+{
+    json manifest;
+    try
+    {
+        manifest = json::parse(aBundle.manifestJson);
+    }
+    catch (const std::exception&)
+    {
+        throw std::runtime_error("The manifest inside is not readable.");
+    }
+
+    if (manifest.value("engramVersion", 0) > 1)
+    {
+        throw std::runtime_error("This save was packed by a newer Engram. Update the mod.");
+    }
+
+    VerifyHashes(manifest, aBundle.files);
+
+    const ModSet senderMods = ModsFromJson(manifest.dump());
+    const ModSet receiverMods = ScanMods(GameDir());
+    const auto root = SaveFolder();
+
+    const CheckReport report =
+        BuildReport(manifest.value("save", json::object()).dump(), senderMods, receiverMods,
+                    LocalGameVersion(root), ProcessRunning(L"Cyberpunk2077.exe"),
+                    ProcessRunning(L"steam.exe"));
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    aJob.files = aBundle.files;
+    aJob.manifestJson = aBundle.manifestJson;
+    aJob.report.findings = report.Lines();
+    aJob.report.blocked = report.Blocked();
+    aJob.report.modded = !senderMods.entries.empty();
+    aJob.report.code = report.Summarise();
+
+    const json save = manifest.value("save", json::object());
+    const int level = static_cast<int>(save.value("level", 0.0));
+    const std::string life = save.value("lifePath", std::string("unknown"));
+    const int minutes = static_cast<int>(save.value("playTime", 0.0)) / 60;
+    aJob.report.message = "Level " + std::to_string(level) + " " + life + ", " +
+                          std::to_string(minutes / 60) + "h played, from game " +
+                          save.value("buildPatch", std::string("unknown"));
+    aJob.report.state = JobState::Done;
+}
+
+// A name that cannot wander out of Engram's own folder.
+bool IsPlainFileName(const std::string& aName)
+{
+    return !aName.empty() && aName.find('/') == std::string::npos &&
+           aName.find('\\') == std::string::npos && aName.find("..") == std::string::npos;
+}
+} // namespace
+
+int32_t StartPackToFile(const std::string& aSaveName)
+{
+    if (aSaveName.empty())
+    {
+        return 0;
+    }
+
+    return Begin(
+        JobKind::Share,
+        [aSaveName](Job& job)
+        {
+            const auto folder = SaveFolder() / aSaveName;
+            if (!std::filesystem::is_directory(folder))
+            {
+                Finish(job, JobState::Failed, "There is no save called " + aSaveName + ".");
+                return;
+            }
+
+            Say(job, "Reading the save");
+            const SaveInfo info = ReadSave(folder);
+            const Files files = CollectSave(folder);
+            const std::string metadata = SaveMetadataJson(folder);
+
+            Say(job, "Checking which mods are installed");
+            const ModSet mods = ScanMods(GameDir());
+
+            const Finding alert = ModsOnThisSave(mods);
+            {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                job.report.findings.push_back(alert.summary);
+                for (const auto& item : alert.items)
+                {
+                    job.report.findings.push_back("  " + item);
+                }
+                job.report.modded = !mods.entries.empty();
+            }
+
+            Say(job, "Packing");
+            const std::string manifest = BuildManifest(info, metadata, mods, files);
+            // No secret. Whoever holds the file already has the save, and a passphrase
+            // that cannot be read out over voice chat would help nobody.
+            const Bytes blob = Pack(manifest, files, "", "");
+
+            const auto target = FileFolder();
+            std::error_code error;
+            std::filesystem::create_directories(target, error);
+
+            const auto path = target / (aSaveName + ".engram");
+            std::ofstream file(path, std::ios::binary);
+            if (!file)
+            {
+                Finish(job, JobState::Failed, "Could not write to " + target.string() + ".");
+                return;
+            }
+            file.write(reinterpret_cast<const char*>(blob.data()),
+                       static_cast<std::streamsize>(blob.size()));
+            file.close();
+            if (!file)
+            {
+                Finish(job, JobState::Failed, "The file did not finish writing.");
+                return;
+            }
+
+            Log("packed " + aSaveName + " to " + path.string());
+
+            std::lock_guard<std::mutex> lock(g_mutex);
+            job.report.state = JobState::Done;
+            job.report.code = path.string();
+            job.report.message =
+                "Written. Copy that file into the other PC's Engram folder and open it from "
+                "Receive. No host and no network involved.";
+        });
+}
+
+std::vector<std::string> PackedFiles()
+{
+    std::vector<std::pair<std::filesystem::file_time_type, std::string>> found;
+    std::error_code error;
+    const auto folder = FileFolder();
+    if (!std::filesystem::is_directory(folder, error) || error)
+    {
+        return {};
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(folder, error))
+    {
+        if (error)
+        {
+            break;
+        }
+        if (!entry.is_regular_file(error) || error || entry.path().extension() != ".engram")
+        {
+            continue;
+        }
+        found.emplace_back(entry.last_write_time(error), entry.path().filename().string());
+    }
+
+    std::sort(found.begin(), found.end(),
+              [](const auto& aLeft, const auto& aRight) { return aLeft.first > aRight.first; });
+
+    std::vector<std::string> names;
+    names.reserve(found.size());
+    for (auto& [when, name] : found)
+    {
+        names.push_back(std::move(name));
+    }
+    return names;
+}
+
+int32_t StartOpenFile(const std::string& aFileName)
+{
+    if (!IsPlainFileName(aFileName))
+    {
+        return 0;
+    }
+
+    return Begin(
+        JobKind::Fetch,
+        [aFileName](Job& job)
+        {
+            const auto path = FileFolder() / aFileName;
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(path, error) || error)
+            {
+                Finish(job, JobState::Failed, "There is no file called " + aFileName + ".");
+                return;
+            }
+            if (std::filesystem::file_size(path, error) > kMaxPayload)
+            {
+                Finish(job, JobState::Failed, "That file is far larger than any save.");
+                return;
+            }
+
+            Say(job, "Reading " + aFileName);
+            std::ifstream file(path, std::ios::binary);
+            const Bytes blob((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+
+            Say(job, "Checking it against this machine");
+            AcceptBundle(job, Unpack(blob, ""));
         });
 }
 
@@ -336,59 +582,14 @@ int32_t StartFetch(const std::string& aCode)
                 return;
             }
 
+            Log("fetch: downloading from " + parsed.host->label + " at " +
+                parsed.host->UrlFor(parsed.fileId));
             Say(job, "Downloading from " + parsed.host->label);
             const Bytes blob = Download(*parsed.host, parsed.fileId);
 
             Say(job, "Opening it");
-            const Bundle bundle = Unpack(blob, parsed.secret);
-
-            json manifest;
-            try
-            {
-                manifest = json::parse(bundle.manifestJson);
-            }
-            catch (const std::exception&)
-            {
-                Finish(job, JobState::Failed, "The manifest inside is not readable.");
-                return;
-            }
-
-            const int version = manifest.value("engramVersion", 0);
-            if (version > 1)
-            {
-                Finish(job, JobState::Failed,
-                       "This save was packed by a newer Engram. Update the mod.");
-                return;
-            }
-
             Say(job, "Checking it against this machine");
-            VerifyHashes(manifest, bundle.files);
-
-            const ModSet senderMods = ModsFromJson(manifest.dump());
-            const ModSet receiverMods = ScanMods(GameDir());
-            const auto root = SaveFolder();
-
-            const CheckReport report = BuildReport(
-                manifest.value("save", json::object()).dump(), senderMods, receiverMods,
-                LocalGameVersion(root), ProcessRunning(L"Cyberpunk2077.exe"),
-                ProcessRunning(L"steam.exe"));
-
-            std::lock_guard<std::mutex> lock(g_mutex);
-            job.files = bundle.files;
-            job.manifestJson = bundle.manifestJson;
-            job.report.findings = report.Lines();
-            job.report.blocked = report.Blocked();
-            job.report.modded = !senderMods.entries.empty();
-            job.report.code = report.Summarise();
-
-            const json save = manifest.value("save", json::object());
-            const int level = static_cast<int>(save.value("level", 0.0));
-            const std::string life = save.value("lifePath", std::string("unknown"));
-            const int minutes = static_cast<int>(save.value("playTime", 0.0)) / 60;
-            job.report.message = "Level " + std::to_string(level) + " " + life + ", " +
-                                 std::to_string(minutes / 60) + "h played, from game " +
-                                 save.value("buildPatch", std::string("unknown"));
-            job.report.state = JobState::Done;
+            AcceptBundle(job, Unpack(blob, parsed.secret));
         });
 }
 

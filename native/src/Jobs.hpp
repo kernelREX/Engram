@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -44,12 +45,31 @@ struct JobReport
 // Where the game is installed, so the mod scan knows where to look. Set once at load.
 void SetGameDir(const std::filesystem::path& aPath);
 
+// Where to write diagnostics. The jobs run on worker threads with no way to reach the
+// plugin's logger, and a share that fails inside the game leaves nothing to look at
+// otherwise. Set once at load; safe to leave unset.
+void SetLogger(std::function<void(const std::string&)> aSink);
+
+// Say something to the log, if there is one.
+void Log(const std::string& aMessage);
+
 // Start packing and uploading a save, asking the host to keep it for `aHours`.
 // Returns a job id, or 0 if it could not start.
 int32_t StartShare(const std::string& aSaveName, int aHours);
 
 // Start fetching and opening the save a code points at.
 int32_t StartFetch(const std::string& aCode);
+
+// Pack a save to a file instead of a host. The hosts are free services run by other people
+// and they do go down, so there has to be a route that needs none of them: this writes a
+// .engram file the sender can move on a USB stick or send any way they like.
+int32_t StartPackToFile(const std::string& aSaveName);
+
+// The .engram files sitting in Engram's folder, newest first.
+std::vector<std::string> PackedFiles();
+
+// Open one of them. Produces the same report a fetched code does.
+int32_t StartOpenFile(const std::string& aFileName);
 
 // Write a save a fetch job is holding. `aForce` goes ahead past the blocking findings.
 int32_t StartWrite(int32_t aFetchJob, bool aForce);

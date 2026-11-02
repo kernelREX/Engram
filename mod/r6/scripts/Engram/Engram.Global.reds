@@ -34,6 +34,9 @@ public native class EngramNative extends IScriptable {
 
   public static native func StartShare(saveName: String, hours: Int32) -> Int32
   public static native func StartFetch(code: String) -> Int32
+  public static native func StartPackToFile(saveName: String) -> Int32
+  public static native func StartOpenFile(fileName: String) -> Int32
+  public static native func PackedFiles() -> array<String>
   public static native func StartWrite(fetchJob: Int32, force: Bool) -> Int32
 
   public static native func JobState(job: Int32) -> Int32
@@ -62,6 +65,10 @@ public class Engram {
 
   public static func SaveNames() -> array<String> {
     return EngramNative.SaveNames();
+  }
+
+  public static func PackedFiles() -> array<String> {
+    return EngramNative.PackedFiles();
   }
 
   public static func StateOf(job: Int32) -> EngramJobState {

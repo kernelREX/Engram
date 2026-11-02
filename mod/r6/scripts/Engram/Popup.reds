@@ -17,6 +17,7 @@ enum EngramPage {
   Home = 0,
   Saves = 1,
   Expiry = 2,
+  Files = 8,
   Busy = 3,
   Shared = 4,
   Incoming = 5,
@@ -30,6 +31,7 @@ public class EngramPopup extends InMenuPopup {
   private let m_page: EngramPage;
   private let m_saves: array<String>;
   private let m_picked: String;
+  private let m_files: array<String>;
   private let m_job: Int32;
   private let m_fetchJob: Int32;
   private let m_requester: wref<inkGameController>;
@@ -145,9 +147,10 @@ public class EngramPopup extends InMenuPopup {
     this.StopPolling();
     this.m_page = EngramPage.Home;
     this.Clear();
-    this.Quiet("Move a save to another PC by reading out a code.");
+    this.Quiet("Move a save to another PC by reading out a code, or through a file.");
     this.Button("Share a save", n"share");
     this.Button("Receive with a code", n"receive");
+    this.Button("Open a file someone sent", n"files");
     this.Quiet(s"Engram \(Engram.Version())");
   }
 
@@ -187,7 +190,43 @@ public class EngramPopup extends InMenuPopup {
     this.Button("12 hours", n"hours:12");
     this.Button("1 day", n"hours:24");
     this.Button("3 days, the longest", n"hours:72");
+    this.Quiet("The hosts are free services and do go down. If they will not take it:");
+    this.Button("Save to a file instead, with no host at all", n"tofile");
     this.Button("Back", n"share");
+  }
+
+  // The route that needs no host at all. Everything a code does, through a file somebody
+  // carries on a stick or sends however they like.
+  private func GoFiles() -> Void {
+    this.m_page = EngramPage.Files;
+    this.Clear();
+
+    let files = Engram.PackedFiles();
+    if ArraySize(files) == 0 {
+      this.Say("There are no Engram files on this machine yet.");
+      this.Quiet("Files live in the Engram folder beside your Cyberpunk saves. Put one");
+      this.Quiet("there and it will show up here.");
+      this.Button("Back", n"home");
+      return;
+    };
+
+    this.Quiet("Pick a file to open. Newest first.");
+    let shown = Min(ArraySize(files), 10);
+    let i = 0;
+    while i < shown {
+      this.Button(files[i], StringToName(s"file:\(i)"));
+      i += 1;
+    };
+    ArrayClear(this.m_files);
+    i = 0;
+    while i < ArraySize(files) {
+      ArrayPush(this.m_files, files[i]);
+      i += 1;
+    };
+    if ArraySize(files) > shown {
+      this.Quiet(s"and \(ArraySize(files) - shown) older file(s), not shown");
+    };
+    this.Button("Back", n"home");
   }
 
   private func GoBusy(what: String) -> Void {
@@ -308,6 +347,16 @@ public class EngramPopup extends InMenuPopup {
     this.Clear();
     this.Alert("That did not work");
     this.Say(EngramNative.JobMessage(this.m_job));
+
+    // A share tries every host in turn, and each one that refused has something to say.
+    // Showing only the last meant a failure on both looked like a failure on one.
+    let detail = EngramNative.JobFindings(this.m_job);
+    let i = 0;
+    while i < ArraySize(detail) && i < 12 {
+      this.Quiet(detail[i]);
+      i += 1;
+    };
+
     this.Button("Back", n"home");
   }
 
@@ -336,6 +385,13 @@ public class EngramPopup extends InMenuPopup {
         if Equals(name, "receive") {
           this.AskForCode();
         } else {
+        if Equals(name, "files") {
+          this.GoFiles();
+        } else {
+        if Equals(name, "tofile") {
+          this.m_job = EngramNative.StartPackToFile(this.m_picked);
+          this.GoBusy(s"Packing \(this.m_picked) to a file");
+        } else {
           if Equals(name, "write") {
             this.m_job = EngramNative.StartWrite(this.m_fetchJob, false);
             this.GoBusy("Writing the save");
@@ -355,12 +411,22 @@ public class EngramPopup extends InMenuPopup {
                   let hours = StringToInt(StrAfterFirst(name, "hours:"));
                   this.m_job = EngramNative.StartShare(this.m_picked, hours);
                   this.GoBusy(s"Packing and uploading \(this.m_picked)");
+                } else {
+                  if StrBeginsWith(name, "file:") {
+                    let at = StringToInt(StrAfterFirst(name, "file:"));
+                    if at >= 0 && at < ArraySize(this.m_files) {
+                      this.m_job = EngramNative.StartOpenFile(this.m_files[at]);
+                      this.GoBusy(s"Opening \(this.m_files[at])");
+                    };
+                  };
                 };
               };
             };
           };
         };
       };
+    };
+    };
     };
     return true;
   }

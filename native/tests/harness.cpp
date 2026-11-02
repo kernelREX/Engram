@@ -24,6 +24,7 @@
 #include "Mods.hpp"
 #include "SaveData.hpp"
 #include "Crypto.hpp"
+#include "Http.hpp"
 #include "SaveFolder.hpp"
 #include "Version.hpp"
 
@@ -133,6 +134,27 @@ int main(int argc, char** argv)
                 return 1;
             }
             std::cout << engram::FormatCode(*host, args[2], args[3]) << "\n";
+            return 0;
+        }
+
+        // Proves the multipart request this builds is well formed, against a local
+        // server, without asking anything of a real host.
+        if (command == "upload" && args.size() >= 5)
+        {
+            const auto* base = engram::HostByKey(args[1]);
+            if (!base)
+            {
+                std::cout << "unknown host" << std::endl;
+                return 1;
+            }
+            engram::Host host = *base;
+            host.uploadUrl = args[2];
+            host.urlTemplate = args[3] + std::string("{id}.bin");
+            const auto result = engram::Upload(host, ReadFile(args[4]),
+                                               args.size() > 5 ? std::stoi(args[5]) : 72);
+            std::cout << result.fileId << std::endl;
+            std::cout << result.url << std::endl;
+            std::cout << result.deleteToken << std::endl;
             return 0;
         }
 

@@ -108,32 +108,73 @@ std::string HostOf(const std::string& aUrl)
     }
 }
 
-std::string ExplainStatus(const std::string& aUrl, DWORD aStatus)
+// The first line of whatever the host said, trimmed. Hosts usually explain themselves in
+// the body, and keeping a little of it is the difference between a failure somebody can
+// report and one nobody can act on.
+std::string Quoted(const std::string& aBody)
+{
+    if (aBody.empty())
+    {
+        return {};
+    }
+    std::string line = aBody.substr(0, aBody.find_first_of("\r\n"));
+    if (line.size() > 160)
+    {
+        line = line.substr(0, 160);
+    }
+    return line.empty() ? std::string() : " It said: " + line;
+}
+
+std::string ExplainStatus(const std::string& aUrl, DWORD aStatus, const std::string& aBody)
 {
     const std::string host = HostOf(aUrl);
+    const std::string said = Quoted(aBody);
+    const std::string code = std::to_string(aStatus);
+
     switch (aStatus)
     {
     case 404:
         return host +
-               " has no file at that address. Codes expire after 72 hours, so this one has "
-               "most likely run out, or the middle of the code was misheard.";
+               " has no file at that address. Codes expire, so this one has most likely run "
+               "out, or the middle of the code was misheard." +
+               said;
     case 403:
     case 418:
-        return host + " refused the request. The host may be blocking automated uploads. "
-                      "Try again later, or use the Engram tool outside the game.";
+        return host + " refused the request (" + code +
+               "). It may be blocking automated uploads." + said;
     case 429:
-        return host +
-               " is rate limiting this connection. Wait a few minutes rather than retrying.";
+        return host + " is rate limiting this connection. Wait a few minutes rather than "
+                      "retrying." +
+               said;
     case 413:
-        return host + " says the file is too large";
+        return host + " says the file is too large." + said;
     default:
         break;
     }
     if (aStatus >= 500 && aStatus < 600)
     {
-        return host + " is having trouble right now. Try the other host.";
+        return host + " answered " + code +
+               ", so the trouble is at their end rather than ours." + said;
     }
-    return host + " answered " + std::to_string(aStatus);
+    return host + " answered " + code + "." + said;
+}
+
+// Read a little of the body of a failed response, so the error can quote it.
+std::string ReadSomeOf(HINTERNET aRequest)
+{
+    DWORD available = 0;
+    if (!WinHttpQueryDataAvailable(aRequest, &available) || available == 0)
+    {
+        return {};
+    }
+    std::string buffer(available > 2048 ? 2048 : available, '\0');
+    DWORD read = 0;
+    if (!WinHttpReadData(aRequest, buffer.data(), static_cast<DWORD>(buffer.size()), &read))
+    {
+        return {};
+    }
+    buffer.resize(read);
+    return buffer;
 }
 
 // One request, start to finish. No retry loop: these are volunteer run services doing us a
@@ -186,7 +227,7 @@ engram::Bytes Request(const std::string& aUrl, const char* aMethod,
                         &status, &statusSize, nullptr);
     if (status < 200 || status >= 300)
     {
-        throw std::runtime_error(ExplainStatus(aUrl, status));
+        throw std::runtime_error(ExplainStatus(aUrl, status, ReadSomeOf(request.value)));
     }
 
     if (aResponseHeaderOut && !aWantedHeader.empty())
