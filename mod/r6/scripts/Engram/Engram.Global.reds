@@ -25,6 +25,7 @@ enum EngramJobKind {
   Share = 1,
   Fetch = 2,
   Write = 3,
+  PackFile = 4,
 }
 
 public native class EngramNative extends IScriptable {
@@ -85,6 +86,7 @@ public class Engram {
       case 1: return EngramJobKind.Share;
       case 2: return EngramJobKind.Fetch;
       case 3: return EngramJobKind.Write;
+      case 4: return EngramJobKind.PackFile;
       default: return EngramJobKind.None;
     };
   }

@@ -35,6 +35,18 @@ struct Job
     // fetching twice.
     engram::Files files;
     std::string manifestJson;
+
+    // Let go of the thread rather than waiting on it. The worker holds a shared_ptr to
+    // this job, so everything it writes into stays alive until it finishes on its own.
+    // Waiting here would mean waiting on a network transfer, from whichever thread
+    // happened to drop the last reference.
+    ~Job()
+    {
+        if (worker.joinable())
+        {
+            worker.detach();
+        }
+    }
 };
 
 std::mutex g_mutex;
@@ -345,6 +357,9 @@ int32_t StartShare(const std::string& aSaveName, int aHours)
             {
                 std::lock_guard<std::mutex> lock(g_mutex);
                 job.report.state = JobState::Failed;
+                // Which mods the save carried is not why it failed, so the list the
+                // sender was shown is cleared to make room for the reasons.
+                job.report.findings.clear();
                 job.report.message =
                     refusals.empty()
                         ? "No host would take the file."
@@ -390,10 +405,12 @@ void AcceptBundle(Job& aJob, const Bundle& aBundle)
     const ModSet receiverMods = ScanMods(GameDir());
     const auto root = SaveFolder();
 
+    // We are running inside Cyberpunk, so asking whether Cyberpunk is running always says
+    // yes. Reporting that as a block meant every single receive was refused until the
+    // player pressed "Write it anyway", which made the check worse than useless.
     const CheckReport report =
         BuildReport(manifest.value("save", json::object()).dump(), senderMods, receiverMods,
-                    LocalGameVersion(root), ProcessRunning(L"Cyberpunk2077.exe"),
-                    ProcessRunning(L"steam.exe"));
+                    LocalGameVersion(root), false, ProcessRunning(L"steam.exe"), true);
 
     std::lock_guard<std::mutex> lock(g_mutex);
     aJob.files = aBundle.files;
@@ -429,7 +446,7 @@ int32_t StartPackToFile(const std::string& aSaveName)
     }
 
     return Begin(
-        JobKind::Share,
+        JobKind::PackFile,
         [aSaveName](Job& job)
         {
             const auto folder = SaveFolder() / aSaveName;
@@ -664,10 +681,12 @@ void Cancel(int32_t aJob)
         g_jobs.erase(found);
     }
 
+    // Marked, dropped, and left to finish. Joining here would block the caller, and the
+    // caller is the game's own thread.
     job->cancelled = true;
     if (job->worker.joinable())
     {
-        job->worker.join();
+        job->worker.detach();
     }
 }
 
@@ -678,12 +697,16 @@ void Forget()
         std::lock_guard<std::mutex> lock(g_mutex);
         taken.swap(g_jobs);
     }
+    // Called when the menu closes, from the game's own thread. A share that is still
+    // uploading can have up to five minutes of transfer timeout left, so waiting for it
+    // here would freeze the game for exactly that long. Let the workers finish by
+    // themselves: each holds a reference to its own job.
     for (auto& [id, job] : taken)
     {
         job->cancelled = true;
         if (job->worker.joinable())
         {
-            job->worker.join();
+            job->worker.detach();
         }
     }
 }

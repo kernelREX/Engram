@@ -70,9 +70,15 @@ struct CheckReport
 };
 
 // Everything worth saying about installing this save here.
+//
+// `aInsideGame` is set by the mod, which runs in Cyberpunk's own process. There the game
+// being open is not a reason to refuse anything: it is simply where we are. Asking whether
+// Cyberpunk is running from inside Cyberpunk always says yes, so the mod passes false for
+// `aGameRunning` and true for this, and gets the note about the load list instead of a
+// block it could never satisfy.
 CheckReport BuildReport(const std::string& aSaveJson, const ModSet& aSender,
-                   const ModSet& aReceiver, int aReceiverGameVersion, bool aGameRunning,
-                   bool aSteamRunning);
+                        const ModSet& aReceiver, int aReceiverGameVersion,
+                        bool aGameRunning, bool aSteamRunning, bool aInsideGame = false);
 
 // The alert both sides get: this save was made with mods, and here they are. Sent to the
 // receiver inside the manifest and shown to the sender before they read the code out, so

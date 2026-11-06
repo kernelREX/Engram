@@ -18,6 +18,7 @@ enum EngramPage {
   Saves = 1,
   Expiry = 2,
   Files = 8,
+  Packed = 9,
   Busy = 3,
   Shared = 4,
   Incoming = 5,
@@ -201,6 +202,7 @@ public class EngramPopup extends InMenuPopup {
     this.m_page = EngramPage.Files;
     this.Clear();
 
+    ArrayClear(this.m_files);
     let files = Engram.PackedFiles();
     if ArraySize(files) == 0 {
       this.Say("There are no Engram files on this machine yet.");
@@ -264,6 +266,16 @@ public class EngramPopup extends InMenuPopup {
   }
 
   // The receiver sees the whole report, including what the save was made with.
+  private func GoPacked() -> Void {
+    this.StopPolling();
+    this.m_page = EngramPage.Packed;
+    this.Clear();
+    this.Say("Packed to a file");
+    this.Quiet(EngramNative.JobCode(this.m_job));
+    this.Quiet(EngramNative.JobMessage(this.m_job));
+    this.Button("Done", n"home");
+  }
+
   private func GoIncoming() -> Void {
     this.StopPolling();
     this.m_page = EngramPage.Incoming;
@@ -299,7 +311,11 @@ public class EngramPopup extends InMenuPopup {
 
   // A finding arrives as "severity\tsummary\tdetail\titems", items joined by " | ".
   private func DrawFinding(line: String) -> Void {
-    let parts = StrSplit(line, "\t");
+    // The third argument is includeEmpty, and it defaults to false. Without it a finding
+    // with no detail or no items loses those fields entirely, the count comes up short,
+    // and the whole line gets printed raw with its tab characters in it. Most findings
+    // have one or the other empty, so this is not an edge case.
+    let parts = StrSplit(line, "\t", true);
     if ArraySize(parts) < 4 {
       this.Quiet(line);
       return;
@@ -522,6 +538,9 @@ public class EngramPopup extends InMenuPopup {
         break;
       case EngramJobKind.Write:
         this.GoWritten();
+        break;
+      case EngramJobKind.PackFile:
+        this.GoPacked();
         break;
       default:
         this.GoFailed();

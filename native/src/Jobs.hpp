@@ -29,6 +29,7 @@ enum class JobKind : int32_t
     Share = 1,
     Fetch = 2,
     Write = 3,
+    PackFile = 4,
 };
 
 struct JobReport

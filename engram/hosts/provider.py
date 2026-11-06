@@ -110,6 +110,8 @@ def upload_nullpointer(host: HostSpec, content: bytes, hours: int = 72) -> Uploa
 UPLOADERS = {
     "litterbox": upload_litterbox,
     "nullpointer": upload_nullpointer,
+    # Same plain text protocol, so the same uploader serves it.
+    "x0at": upload_nullpointer,
 }
 
 

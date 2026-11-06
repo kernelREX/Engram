@@ -91,11 +91,19 @@ const std::string kBase62 =
 
 constexpr size_t kMaxIdLength = 31;
 
+// Tried in this order. Every tag is a character the Crockford alphabet contains, so
+// normalising a spoken code never rewrites the one character that says which host it is on.
+//
+// Three rather than two on purpose: these are free services run by volunteers, and a share
+// that found both of the first two unwilling had nowhere else to go. x0.at speaks the same
+// plain text protocol as 0x0.st, so it costs nothing but a row here.
 const std::vector<Host> g_hosts = {
     Host{'C', "litterbox", "Litterbox", "https://litter.catbox.moe/{id}.bin", kBase36,
          "https://litterbox.catbox.moe/resources/internals/api.php", "engram.bin", "72h", 6,
          1024ull * 1024 * 1024},
     Host{'N', "nullpointer", "0x0.st", "https://0x0.st/{id}.bin", kBase62, "https://0x0.st",
+         "engram.bin", "72", -1, 512ull * 1024 * 1024},
+    Host{'X', "x0at", "x0.at", "https://x0.at/{id}.bin", kBase62, "https://x0.at",
          "engram.bin", "72", -1, 512ull * 1024 * 1024},
 };
 

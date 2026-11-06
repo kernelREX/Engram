@@ -75,8 +75,10 @@ sender's mod list, compares it against yours, and sorts the differences into thr
 - You are missing ArchiveXL or TweakXL themselves.
 - The save is from a newer patch than your game. Cyberpunk does not read those.
 - The save needs Phantom Liberty and you do not have it.
-- Cyberpunk is open. It writes over this folder and will not notice a save that appears
-  while it is running.
+- Cyberpunk is open, when you are using the standalone tool. It writes over this folder
+  and will not notice a save that appears while it is running. This does not apply in the
+  mod, which is already inside the game: there it just reminds you that the load list is
+  built when the menu opens, so step back out to the main menu to see the new save.
 
 **It warns** when the save will load but something may be quietly wrong:
 
@@ -235,8 +237,8 @@ an install. Point it at the right place with `--game-dir`.
 codes last 72 hours. If it downloads and then says the secret did not open it, the last
 eight characters are wrong.
 
-**A host refuses to take the file.** Engram knows more than one and tries the next by
-itself, and tells you what each one said rather than only the last. If both refuse, use
+**A host refuses to take the file.** Engram knows three and tries each in turn, and tells
+you what every one of them said rather than only the last. If both refuse, use
 **Save to a file instead**, which needs no host. Which host a code is on is baked into its first character, so old codes keep
 working when the default changes. If both are down, `engram pack` still works and needs
 nothing but a USB stick.

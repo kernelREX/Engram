@@ -195,7 +195,9 @@ int main(int argc, char** argv)
                                                     engram::ModsFromJson(ReadText(args[2])),
                                                     engram::ModsFromJson(ReadText(args[3])),
                                                     args.size() > 4 ? std::stoi(args[4]) : 0,
-                                                    false, false);
+                                                    args.size() > 5 && args[5] == "gamerunning",
+                                                    false,
+                                                    args.size() > 5 && args[5] == "insidegame");
             std::cout << report.Summarise() << "\n";
             for (const auto& line : report.Lines())
             {

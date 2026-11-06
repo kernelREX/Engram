@@ -433,3 +433,157 @@ def test_a_shorter_choice_is_never_rounded_up_past_the_next_step():
     assert spec.LITTERBOX.expiry_spelling(2) == "12h"
     assert spec.LITTERBOX.expiry_spelling(13) == "24h"
     assert spec.LITTERBOX.expiry_spelling(25) == "72h"
+
+
+# ------------------------------------------------- running inside the game, or beside it
+
+def report_lines(tmp_path, save: dict, mods_json: str, where: str = "") -> list[str]:
+    save_file = tmp_path / "save.json"
+    save_file.write_text(json.dumps(save), encoding="utf-8")
+    mods_file = tmp_path / "mods.json"
+    mods_file.write_text(mods_json, encoding="utf-8")
+
+    args = ["report", str(save_file), str(mods_file), str(mods_file), "2310"]
+    if where:
+        args.append(where)
+
+    result = subprocess.run(
+        [str(HARNESS), *args], capture_output=True, text=True, timeout=120
+    )
+    return result.stdout.strip().splitlines()
+
+
+EMPTY_MODS = json.dumps({"mods": [], "phantomLiberty": True})
+A_SAVE = {"gameVersion": 2310, "buildPatch": "2.31", "additionalContentIds": ["EP1"]}
+
+
+def test_the_mod_never_blocks_itself_for_the_game_being_open(tmp_path):
+    """Asking whether Cyberpunk is running, from inside Cyberpunk, always says yes.
+
+    Reporting that as a block refused every single receive until the player pressed
+    "Write it anyway", which made the check worse than useless.
+    """
+    lines = report_lines(tmp_path, A_SAVE, EMPTY_MODS, "insidegame")
+    blocks = [line for line in lines if line.startswith("2\t")]
+    assert blocks == [], blocks
+
+
+def test_inside_the_game_the_player_is_told_about_the_load_list(tmp_path):
+    lines = report_lines(tmp_path, A_SAVE, EMPTY_MODS, "insidegame")
+    assert any("inside Cyberpunk" in line for line in lines)
+    assert any("Load Game" in line for line in lines)
+
+
+def test_outside_the_game_an_open_game_still_blocks(tmp_path):
+    """The standalone tool writes into a folder the running game owns, so this stands."""
+    lines = report_lines(tmp_path, A_SAVE, EMPTY_MODS, "gamerunning")
+    blocks = [line for line in lines if line.startswith("2\t")]
+    assert any("Cyberpunk is open" in line for line in blocks)
+
+
+def test_neither_flag_means_neither_finding(tmp_path):
+    lines = report_lines(tmp_path, A_SAVE, EMPTY_MODS)
+    assert not any("Cyberpunk is open" in line for line in lines)
+    assert not any("inside Cyberpunk" in line for line in lines)
+
+
+# ------------------------------------------------------------------- the third host
+
+def test_the_third_host_round_trips_like_the_others():
+    rng = random.Random(31337)
+    for length in range(1, 7):
+        for _ in range(8):
+            file_id = "".join(rng.choice(spec.BASE62) for _ in range(length))
+            secret = codes.new_secret()
+            mine = codes.format_code(spec.X0AT, file_id, secret)
+            assert native("code", "x0at", file_id, secret) == mine
+
+            parsed = codes.parse_code(mine)
+            assert parsed.host.key == "x0at"
+            assert parsed.file_id == file_id
+            assert parsed.secret == secret
+
+
+def test_every_host_tag_is_distinct_and_sayable():
+    tags = [host.tag for host in spec.HOSTS]
+    assert len(set(tags)) == len(tags)
+    for tag in tags:
+        assert tag in codes.crockford.ALPHABET
+        assert codes.crockford.normalise(tag) == tag
+
+
+# ------------------------------------------- the shape the menu parses findings out of
+
+def raw_report_lines(tmp_path, save: dict, sender: dict, receiver: dict,
+                     where: str = "insidegame") -> list[str]:
+    """Report lines exactly as emitted, with no whitespace trimmed off the ends.
+
+    Trailing tabs matter here: they are the empty fields, and stripping them hides the
+    very thing these tests are about.
+    """
+    for name, blob in (("save", save), ("sender", sender), ("receiver", receiver)):
+        (tmp_path / f"{name}.json").write_text(json.dumps(blob), encoding="utf-8")
+
+    out = subprocess.run(
+        [str(HARNESS), "report", str(tmp_path / "save.json"), str(tmp_path / "sender.json"),
+         str(tmp_path / "receiver.json"), "2310", where],
+        capture_output=True, text=True, timeout=120,
+    ).stdout
+
+    lines = out.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [line.rstrip("\r") for line in lines][1:]
+
+
+BUSY_SAVE = {
+    "gameVersion": 2310, "buildPatch": "2.31",
+    "additionalContentIds": ["EP1"], "isModded": True,
+}
+BUSY_SENDER = {"phantomLiberty": True, "mods": [
+    {"name": "Cyberbane", "kind": "redscript", "version": "1.4.5",
+     "writesPersistentState": True},
+    {"name": "Atlas", "kind": "archive", "extendsRecords": True},
+    {"name": "OnlyHere", "kind": "cet", "version": "1.0"},
+]}
+BUSY_RECEIVER = {"phantomLiberty": True, "mods": [
+    {"name": "Cyberbane", "kind": "redscript", "version": "1.9.0",
+     "writesPersistentState": True},
+]}
+
+
+def test_every_finding_line_has_exactly_four_fields(tmp_path):
+    """The menu splits on tabs and reads four fields. Fewer and it prints the line raw.
+
+    A finding with no detail, or no items, still has to occupy its field.
+    """
+    lines = raw_report_lines(tmp_path, BUSY_SAVE, BUSY_SENDER, BUSY_RECEIVER)
+    assert lines, "expected this comparison to produce findings"
+    for line in lines:
+        assert len(line.split("\t")) == 4, line
+
+
+def test_findings_with_an_empty_field_are_normal_not_rare(tmp_path):
+    """This is why the menu must split with includeEmpty set.
+
+    redscript's StrSplit drops empty fields unless told otherwise, so without it these
+    lines come back short and get printed with their tab characters showing.
+    """
+    lines = raw_report_lines(tmp_path, BUSY_SAVE, BUSY_SENDER, BUSY_RECEIVER)
+    short = [line for line in lines if len([f for f in line.split("\t") if f]) < 4]
+    assert short, "expected at least one finding with an empty detail or no items"
+
+
+def test_the_severity_field_is_always_a_number_the_menu_knows(tmp_path):
+    lines = raw_report_lines(tmp_path, BUSY_SAVE, BUSY_SENDER, BUSY_RECEIVER)
+    for line in lines:
+        assert line.split("\t")[0] in {"0", "1", "2"}, line
+
+
+def test_items_are_joined_with_the_separator_the_menu_splits_on(tmp_path):
+    lines = raw_report_lines(tmp_path, BUSY_SAVE, BUSY_SENDER, BUSY_RECEIVER)
+    listed = [line for line in lines if line.split("\t")[3]]
+    assert listed
+    for line in listed:
+        for item in line.split("\t")[3].split(" | "):
+            assert item.strip(), line

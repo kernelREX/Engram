@@ -138,8 +138,24 @@ NULLPOINTER = HostSpec(
     note="retention scales down with file size",
 )
 
-#: Hosts in the order Engram tries them when sharing.
-HOSTS: tuple[HostSpec, ...] = (LITTERBOX, NULLPOINTER)
+X0AT = HostSpec(
+    tag="X",
+    key="x0at",
+    label="x0.at",
+    url_template="https://x0.at/{id}.bin",
+    id_charset=BASE62,
+    id_width=None,
+    upload_filename="engram.bin",
+    upload_url="https://x0.at",
+    max_bytes=512 * 1024 * 1024,
+    expiry="72",
+    note="speaks the same plain text protocol as 0x0.st",
+)
+
+#: Hosts in the order Engram tries them when sharing. Three rather than two, because these
+#: are free services run by volunteers and a share that found both of the first two
+#: unwilling had nowhere else to go.
+HOSTS: tuple[HostSpec, ...] = (LITTERBOX, NULLPOINTER, X0AT)
 
 _BY_TAG = {h.tag: h for h in HOSTS}
 _BY_KEY = {h.key: h for h in HOSTS}

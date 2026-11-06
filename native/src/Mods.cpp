@@ -696,8 +696,8 @@ Finding ModsOnThisSave(const ModSet& aMods)
 }
 
 CheckReport BuildReport(const std::string& aSaveJson, const ModSet& aSender,
-                   const ModSet& aReceiver, int aReceiverGameVersion, bool aGameRunning,
-                   bool aSteamRunning)
+                        const ModSet& aReceiver, int aReceiverGameVersion,
+                        bool aGameRunning, bool aSteamRunning, bool aInsideGame)
 {
     CheckReport report;
     const auto add = [&report](Severity aSeverity, const char* aCode, std::string aSummary,
@@ -921,7 +921,17 @@ CheckReport BuildReport(const std::string& aSaveJson, const ModSet& aSender,
     }
 
     // What is holding the save folder open right now.
-    if (aGameRunning)
+    //
+    // Inside the game this is not a question worth asking: the answer is always yes, and
+    // blocking on it would mean the mod could never write anything. What matters there is
+    // only that the load list is already built, so the new save needs the menu reopened.
+    if (aInsideGame)
+    {
+        add(Severity::Note, "inside-game", "You are doing this from inside Cyberpunk",
+            "The save is written straight away, but the load list was built when this menu "
+            "opened. Go back out to the main menu and into Load Game and it will be there.");
+    }
+    else if (aGameRunning)
     {
         add(Severity::Block, "game-running", "Cyberpunk is open",
             "The game writes its own saves over this folder and will not see a new one that "
